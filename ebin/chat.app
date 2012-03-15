@@ -1,0 +1,8 @@
+{application,chat,
+             [{description,[]},
+              {vsn,"1"},
+              {registered,[]},
+              {applications,[kernel,stdlib]},
+              {mod,{chat_app,[]}},
+              {env,[]},
+              {modules,[chat_app,chat_server,chat_sup]}]}.
