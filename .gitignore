@@ -1,1 +1,2 @@
 ebin/ # no beams
+test/ # and why would I need tests?
