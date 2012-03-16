@@ -16,8 +16,10 @@ start() ->
     {ok, Pid} = chat_server:start_link(),
     Pid.
 
-stop(_) ->
-    chat_server:shutdown().
+stop(Pid) ->
+    MRef = erlang:monitor(process, Pid),
+    chat_server:shutdown(),
+    receive {'DOWN', MRef, _, _, _} -> ok end.
 
 %%% ACTUAL TESTS
 is_registered(Pid) ->
