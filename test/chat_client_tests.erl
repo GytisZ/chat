@@ -20,10 +20,10 @@ stop(_) ->
 %%% ACTUAL TESTS
 
 sign_in_and_out(_) ->
-    chat_server:sign_in("baliulia"),
-    chat_server:sign_in("buddha"),
-    List1 = chat_server:list_names(),
+    chat_client:sign_in("baliulia"),
+    chat_client:sign_in("buddha"),
+    List1 = chat_client:list_names(),
     chat_server:sign_out("baliulia"),
-    List2 = chat_server:list_names(),
+    List2 = chat_client:list_names(),
     [?_assertEqual(["baliulia", "buddha"], List1),
      ?_assertEqual(["buddha"], List2)]. 
