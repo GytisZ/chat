@@ -3,7 +3,8 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/0, sign_in/2, sign_out/1, list_names/0, shutdown/0]).
+-export([start_link/0, sign_in/2, sign_out/1, list_names/0, shutdown/0,
+        send_message/2]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -31,6 +32,9 @@ sign_in(Nick, Pid) ->
 sign_out(Nick) ->
     gen_server:cast({global, ?SERVER}, {sign_out, Nick}).
 
+%% Send message
+send_message(Nick, Message) ->
+    gen_server:call({global, ?SERVER}, {sendmsg, Nick, Message}).
 
 %% Get the list of all the users currently connected to the server
 list_names() ->
@@ -55,8 +59,19 @@ handle_call({sign_in, Nick, Pid}, _From, State = #state{name_list=List}) ->
         true  ->
             {reply, name_taken, State}
     end;
+
 handle_call(list_names, _From, State=#state{name_list=List}) ->
-    {reply, dict:fetch_keys(List), State}.
+    {reply, dict:fetch_keys(List), State};
+
+handle_call({sendmsg, To, Message}, _From, State=#state{name_list=List}) ->
+    case dict:is_key(To, List) of
+        true ->
+            [Pid] = dict:fetch(To, List),
+            Pid ! {printmsg, Message};
+        false -> ok
+    end,
+    {reply, ok, State}.
+
 
 handle_cast(stop, State) ->
     {stop, normal, State};
