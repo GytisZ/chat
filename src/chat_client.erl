@@ -1,28 +1,82 @@
 -module(chat_client).
+-behaviour(gen_server).
 
--export([sign_in/1, sign_out/1, list_names/0, send_message/2,
-         handle_messages/1]).
+%% Public
+-export([start/0, name/1, send/2, list_names/0, sign_out/0]).
 
+%% Usual OTP goodness
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
 
-sign_in(Nick) ->
-    Pid = spawn(chat_client, handle_messages, [Nick]),
-    chat_server:sign_in(Nick, Pid).
+%% State
+-record(state, {name, pid}).
+%%%%%%%%%%%%%%%%%%
+%%% PUBLIC API %%%
+%%%%%%%%%%%%%%%%%%
 
-sign_out(Nick) ->
-    chat_server:sign_out(Nick).
+start() ->
+    {ok, Pid} = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
+    set_pid(Pid).
+    
+name(Nick) ->
+    gen_server:call(?MODULE, {sign_in, Nick}).
 
-send_message(Nick, Message) ->
-    chat_server:send_message(Nick, Message).
+send(To, Message) ->
+    chat_server:send_message(To, Message).
+
 list_names() ->
     chat_server:list_names().
 
-handle_messages(Nick) ->
-   receive
-       {printmsg, Message} ->
-            io:format("~p got: ~p~n", [Nick, Message]),
-            handle_messages(Nick);
-       stop ->
-            ok
-   end.
+sign_out() ->
+    gen_server:cast(?MODULE, sign_out).
+%%%%%%%%%%%%%%%%%
+%%% CALLBACKS %%%
+%%%%%%%%%%%%%%%%%
 
-            
+init([]) ->
+    {ok, #state{}}.
+
+
+handle_call({sign_in, Name}, _From, State=#state{pid=Pid}) ->
+    case chat_server:sign_in(Name, Pid) of
+        ok -> {reply, ok, State#state{name=Name}};
+        name_taken -> 
+            io:format("~p is taken. Select a different nick.~n", [Name]),
+            {reply, ok, State}
+    end;
+
+handle_call(_Request, _From, State) ->
+    {reply, ok, State}.
+
+
+handle_cast(sign_out, State=#state{name=Nick}) ->
+    chat_server:sign_out(Nick),
+    {noreply, State};
+
+handle_cast({set_pid, Pid}, State=#state{}) ->
+    {noreply, State#state{pid=Pid}};
+
+handle_cast(_Message, State) ->
+    {noreply, State}.
+
+
+handle_info({printmsg, Message}, State) ->
+    io:format("You received: ~p~n", [Message]),
+    {noreply, State};
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% HELPER FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+set_pid(Pid) ->
+    gen_server:cast(?MODULE, {set_pid, Pid}).
