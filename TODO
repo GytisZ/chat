@@ -1,2 +1,1 @@
-transform client into gen_server
-restrain server for accepting two names from the same pid
+restrain server from accepting two names from the same pid
