@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/0, sign_in/1, sign_out/1, list_names/0]).
+-export([start_link/0, sign_in/1, sign_out/1, list_names/0, shutdown/0]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -29,6 +29,9 @@ sign_out(Nick) ->
 %% Get the list of all the users currently connected to the server
 list_names() ->
     gen_server:call({global, ?SERVER}, list_names).
+%% Shut down the server
+shutdown() ->
+    gen_server:cast({global, ?SERVER}, stop).
 
 
 
@@ -46,6 +49,8 @@ handle_call({sign_in, Nick}, _From, State = #state{name_list=List}) ->
 handle_call(list_names, _From, State=#state{name_list=List}) ->
     {reply, gb_sets:to_list(List), State}.
 
+handle_cast(stop, State) ->
+    {stop, normal, State};
 
 handle_cast({sign_out, Nick}, State=#state{name_list=List}) ->
     NewList= gb_sets:del_element(Nick, List),
