@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/0, sign_in/2, sign_out/2, list_names/1]).
+-export([start_link/0, sign_in/1, sign_out/1, list_names/0]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -11,24 +11,24 @@
 
 %% Server state
 -record(state, {name_list=gb_sets:new()}).
-
+-define(SERVER, ?MODULE).
 
 %%% PUBLIC API
 
 start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+    gen_server:start_link({global, ?SERVER}, ?MODULE, [], []).
 
 %% Try signing in. Server may refuse if the user name is taken
-sign_in(ServerRef, Nick) ->
-    gen_server:call(ServerRef, {sign_in, Nick}).
+sign_in(Nick) ->
+    gen_server:call({global, ?SERVER}, {sign_in, Nick}).
 
 %% Sign out. This is asynchronous till client will be separated from the server
-sign_out(ServerRef, Nick) ->
-    gen_server:cast(ServerRef, {sign_out, Nick}).
+sign_out(Nick) ->
+    gen_server:cast({global, ?SERVER}, {sign_out, Nick}).
 
 %% Get the list of all the users currently connected to the server
-list_names(ServerRef) ->
-    gen_server:call(ServerRef, list_names).
+list_names() ->
+    gen_server:call({global, ?SERVER}, list_names).
 
 
 
@@ -48,8 +48,8 @@ handle_call(list_names, _From, State=#state{name_list=List}) ->
 
 
 handle_cast({sign_out, Nick}, State=#state{name_list=List}) ->
-    gb_sets:del_element(Nick, List),
-    {noreply, State#state{name_list=List}}.
+    NewList= gb_sets:del_element(Nick, List),
+    {noreply, State#state{name_list=NewList}}.
 
 
 %% Placeholders for now
