@@ -1,6 +1,7 @@
 -module(chat_client).
 
--export([sign_in/1, sign_out/1, list_names/0, handle_messages/1]).
+-export([sign_in/1, sign_out/1, list_names/0, send_message/2,
+         handle_messages/1]).
 
 
 sign_in(Nick) ->
@@ -10,6 +11,8 @@ sign_in(Nick) ->
 sign_out(Nick) ->
     chat_server:sign_out(Nick).
 
+send_message(Nick, Message) ->
+    chat_server:send_message(Nick, Message).
 list_names() ->
     chat_server:list_names().
 

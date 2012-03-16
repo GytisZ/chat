@@ -1,2 +1,2 @@
-Add messaging
-Add reaction to name_taken
+transform client into gen_server
+restrain server for accepting two names from the same pid

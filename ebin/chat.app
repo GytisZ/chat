@@ -5,4 +5,5 @@
               {applications,[kernel,stdlib]},
               {mod,{chat_app,[]}},
               {env,[]},
-              {modules,[chat_app,chat_client,chat_server,chat_sup]}]}.
+              {modules,[chat_app,chat_client,chat_client_new,chat_server,
+                        chat_sup]}]}.
