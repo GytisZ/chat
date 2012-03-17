@@ -42,7 +42,10 @@ handle_call({sign_in, Name}, _From, State=#state{pid=Pid}) ->
         ok -> {reply, ok, State#state{name=Name}};
         name_taken -> 
             io:format("~p is taken. Select a different nick.~n", [Name]),
-            {reply, name_taken, State}
+            {reply, name_taken, State};
+        already_signed_in ->
+            io:format("You are already signed in.~n", []),
+            {reply, already_signed_in, State}
     end;
 
 handle_call(_Request, _From, State) ->

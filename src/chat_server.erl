@@ -53,11 +53,17 @@ init([]) ->
 
 
 handle_call({sign_in, Nick, Pid}, _From, State = #state{users=_List}) ->
-    case ets:insert_new(users, {Nick, Pid}) of
-        true  ->
-            {reply, ok, State};
-        false  ->
-            {reply, name_taken, State}
+    case {ets:match(users, {Nick, '$1'}),
+          ets:match(users, {'$1', Pid})} of
+            {[],[]} -> 
+                ets:insert(users, {Nick, Pid}),
+                {reply, ok, State};
+            {[], _} ->
+                {reply, already_signed_in, State};
+            {_, []} ->
+                {reply, name_taken, State};
+            {[[Pid]], [[Nick]]} ->
+                {reply, name_taken, State}
     end;
 
 handle_call(list_names, _From, State=#state{users=_List}) ->

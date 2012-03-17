@@ -27,13 +27,16 @@ stop(Pid) ->
 sign_in_and_out(_) ->
     chat_client:start(),
     chat_client:name("baliulia"),
-    chat_client:name("buddha"),
     List1 = chat_client:list_names(),
     chat_client:sign_out(),
     List2 = chat_client:list_names(),
-    [?_assertEqual([["baliulia"], ["buddha"]], List1),
-     ?_assertEqual([["baliulia"]], List2)]. 
+    [?_assertEqual([["baliulia"]], List1),
+     ?_assertEqual([], List2)]. 
 
 name_taken(_) ->
     chat_client:name("Gytis"),
     [?_assertEqual(name_taken, chat_client:name("Gytis"))].
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% HELPER FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%

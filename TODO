@@ -1,3 +1,5 @@
 restrain server from accepting two names with the same pid
 remove macros
 fix chat_client_tests
+add pid conflict tests
+use nick/name consistently throughout the project
