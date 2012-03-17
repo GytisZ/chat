@@ -12,7 +12,6 @@
 
 %% Server state
 -record(state, {users=ets:new(users, [set, named_table])}).
--define(SERVER, ?MODULE).
 
 %%%%%%%%%%%%%%%%%%%
 %%% PUBLIC API %%%%
@@ -20,30 +19,30 @@
 
 
 start_link() ->
-    gen_server:start_link({global, ?SERVER}, ?MODULE, [], []).
+    gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 
 
 %% Try signing in. Server may refuse if the user name is taken
 sign_in(Nick, Pid) ->
-    gen_server:call({global, ?SERVER}, {sign_in, Nick, Pid}).
+    gen_server:call({global, ?MODULE}, {sign_in, Nick, Pid}).
 
 
 %% Sign out. This is asynchronous till client will be separated from the server
 sign_out(Nick) ->
-    gen_server:cast({global, ?SERVER}, {sign_out, Nick}).
+    gen_server:cast({global, ?MODULE}, {sign_out, Nick}).
 
 %% Send message
 send_message(Nick, Message) ->
-    gen_server:call({global, ?SERVER}, {sendmsg, Nick, Message}).
+    gen_server:call({global, ?MODULE}, {sendmsg, Nick, Message}).
 
 %% Get the list of all the users currently connected to the server
 list_names() ->
-    gen_server:call({global, ?SERVER}, list_names).
+    gen_server:call({global, ?MODULE}, list_names).
 
 
 %% Shut down the server
 shutdown() ->
-    gen_server:cast({global, ?SERVER}, stop).
+    gen_server:cast({global, ?MODULE}, stop).
 
 
 %%% Server functions
