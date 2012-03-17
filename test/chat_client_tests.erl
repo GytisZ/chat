@@ -9,8 +9,12 @@ signin_and_name_list_test_() ->
      ?setup(fun sign_in_and_out/1)}.
 
 same_nick_test_() ->
-    {"name_taken is returned if the nick is already take.",
+    {"name_taken is returned if the nick is already taken.",
      ?setup(fun name_taken/1)}.
+
+multiple_user_test_() ->
+    {"chat_server keeps track of multiple sign in/outs.",
+     ?setup(fun mult_user/1)}.
 
 %%% SETUP FUNCTIONS
 
@@ -36,6 +40,25 @@ sign_in_and_out(_) ->
 name_taken(_) ->
     chat_client:name("Gytis"),
     [?_assertEqual(name_taken, chat_client:name("Gytis"))].
+
+mult_user(_) ->
+    chat_client:start(nifnif),
+    chat_client:start(nufnuf),
+    chat_client:start(nafnaf),
+    chat_client:name(nifnif, "nifnif"),
+    chat_client:name(nafnaf, "nafnaf"),
+    List1 = chat_client:list_names(),
+    chat_client:name(nufnuf, "nufnuf"),
+    List2 = chat_client:list_names(),
+    chat_client:sign_out(nufnuf),
+    List3 = chat_client:list_names(),
+    chat_client:sign_out(nafnaf),
+    chat_client:sign_out(nifnif),
+    List4 = chat_client:list_names(),
+    [?_assertEqual([["nifnif"], ["nafnaf"]], List1),
+     ?_assertEqual([["nufnuf"], ["nifnif"], ["nafnaf"]], List2),
+     ?_assertEqual([["nifnif"], ["nafnaf"]], List3),
+     ?_assertEqual([], List4)].
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
