@@ -1,1 +1,3 @@
-restrain server from accepting two names from the same pid
+restrain server from accepting two names with the same pid
+remove macros
+fix chat_client_tests
