@@ -16,6 +16,10 @@ multiple_user_test_() ->
     {"chat_server keeps track of multiple sign in/outs.",
      ?setup(fun mult_user/1)}.
 
+sign_in_twice_test_() ->
+    {"chat server prohibits a second sign in attempt.",
+     ?setup(fun sign_in_twice/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -38,8 +42,10 @@ sign_in_and_out(_) ->
      ?_assertEqual([], List2)]. 
 
 name_taken(_) ->
-    chat_client:name("Gytis"),
-    [?_assertEqual(name_taken, chat_client:name("Gytis"))].
+    chat_client:start(gytis),
+    chat_client:name(gytis, "Gytis"),
+    chat_client:start(imposter),
+    [?_assertEqual(name_taken, chat_client:name(imposter, "Gytis"))].
 
 mult_user(_) ->
     chat_client:start(nifnif),
@@ -59,6 +65,11 @@ mult_user(_) ->
      ?_assertEqual([["nufnuf"], ["nifnif"], ["nafnaf"]], List2),
      ?_assertEqual([["nifnif"], ["nafnaf"]], List3),
      ?_assertEqual([], List4)].
+
+sign_in_twice(_) ->
+    chat_client:start(newton),
+    chat_client:name(newton, "Isaac"),
+    [?_assertEqual(already_signed_in, chat_client:name(newton, "Hotpants"))].
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%

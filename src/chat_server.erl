@@ -60,9 +60,7 @@ handle_call({sign_in, Nick, Pid}, _From, State = #state{users=_List}) ->
                 {reply, ok, State};
             {[], _} ->
                 {reply, already_signed_in, State};
-            {_, []} ->
-                {reply, name_taken, State};
-            {[[Pid]], [[Nick]]} ->
+            {[_], _} ->
                 {reply, name_taken, State}
     end;
 
