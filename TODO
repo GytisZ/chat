@@ -1,4 +1,4 @@
-restrain server from accepting two names with the same pid
+add tests for new chat_client functions
 remove macros
 fix chat_client_tests
 add pid conflict tests
