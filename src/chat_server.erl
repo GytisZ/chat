@@ -70,10 +70,12 @@ handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
     case ets:match(users, {To, '$1'})  of
         [[Pid]]->
             [[Author]] = ets:match(users, {'$1', From}),
-            Pid ! {printmsg, Author, Message},
-            {reply, ok, State};
+            Pid ! {printmsg, Author, Message};
         [] -> ok
     end,
+    {reply, ok, State};
+
+handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
@@ -82,6 +84,9 @@ handle_cast(stop, State) ->
 
 handle_cast({sign_out, Nick}, State=#state{users=_List}) ->
     ets:delete(users, Nick),
+    {noreply, State};
+
+handle_cast(_Message, State) ->
     {noreply, State}.
 
 
