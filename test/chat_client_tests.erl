@@ -31,8 +31,8 @@ sign_in_and_out(_) ->
     List1 = chat_client:list_names(),
     chat_client:sign_out(),
     List2 = chat_client:list_names(),
-    [?_assertEqual(["baliulia", "buddha"], List1),
-     ?_assertEqual(["baliulia"], List2)]. 
+    [?_assertEqual([["baliulia"], ["buddha"]], List1),
+     ?_assertEqual([["baliulia"]], List2)]. 
 
 name_taken(_) ->
     chat_client:name("Gytis"),

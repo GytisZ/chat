@@ -11,7 +11,7 @@
          terminate/2, code_change/3]).
 
 %% Server state
--record(state, {name_list=dict:new()}).
+-record(state, {users=ets:new(users, [set, named_table])}).
 -define(SERVER, ?MODULE).
 
 %%%%%%%%%%%%%%%%%%%
@@ -49,26 +49,25 @@ shutdown() ->
 %%% Server functions
 
 init([]) ->
-    {ok, #state{name_list=dict:new()}}.
+    {ok, #state{users=ets:new(users, [set, named_table])}}.
 
 
-handle_call({sign_in, Nick, Pid}, _From, State = #state{name_list=List}) ->
-    case dict:is_key(Nick, List) of
-        false ->
-            {reply, ok, State#state{name_list=dict:append(Nick, Pid,  List)}};
+handle_call({sign_in, Nick, Pid}, _From, State = #state{users=_List}) ->
+    case ets:insert_new(users, {Nick, Pid}) of
         true  ->
+            {reply, ok, State};
+        false  ->
             {reply, name_taken, State}
     end;
 
-handle_call(list_names, _From, State=#state{name_list=List}) ->
-    {reply, dict:fetch_keys(List), State};
+handle_call(list_names, _From, State=#state{users=_List}) ->
+    {reply, ets:match(users, {'$1', '_'}), State};
 
-handle_call({sendmsg, To, Message}, _From, State=#state{name_list=List}) ->
-    case dict:is_key(To, List) of
-        true ->
-            [Pid] = dict:fetch(To, List),
+handle_call({sendmsg, To, Message}, _From, State=#state{users=_List}) ->
+    case ets:match(users, {To, '$1'})  of
+        [[Pid]]->
             Pid ! {printmsg, Message};
-        false -> ok
+        [] -> ok
     end,
     {reply, ok, State}.
 
@@ -76,9 +75,9 @@ handle_call({sendmsg, To, Message}, _From, State=#state{name_list=List}) ->
 handle_cast(stop, State) ->
     {stop, normal, State};
 
-handle_cast({sign_out, Nick}, State=#state{name_list=List}) ->
-    NewList= dict:erase(Nick, List),
-    {noreply, State#state{name_list=NewList}}.
+handle_cast({sign_out, Nick}, State=#state{users=_List}) ->
+    ets:delete(users, Nick),
+    {noreply, State}.
 
 
 %% Placeholders for now
