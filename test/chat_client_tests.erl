@@ -20,6 +20,10 @@ sign_in_twice_test_() ->
     {"chat server prohibits a second sign in attempt.",
      ?setup(fun sign_in_twice/1)}.
 
+send_private_msg_test_() ->
+    {"chat_server handles private messages.",
+     ?setup(fun send_msg/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -70,6 +74,14 @@ sign_in_twice(_) ->
     chat_client:start(newton),
     chat_client:name(newton, "Isaac"),
     [?_assertEqual(already_signed_in, chat_client:name(newton, "Hotpants"))].
+
+send_msg(_) ->
+    chat_client:start(r2d2),
+    chat_client:start(c3po),
+    chat_client:name(r2d2, "R2D2"),
+    chat_client:name(c3po, "C3PO"),
+    [?_assertEqual(ok,
+                   chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%

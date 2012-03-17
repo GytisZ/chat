@@ -2,8 +2,8 @@
 -behaviour(gen_server).
 
 %% Public
--export([start/0, start/1, name/1, name/2, send/2, list_names/0, sign_out/0,
-        sign_out/1]).
+-export([start/0, start/1, name/1, name/2, send/2, send/3, list_names/0,
+         sign_out/0, sign_out/1]).
 
 %% Usual OTP goodness
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -29,7 +29,9 @@ name(RefName, Nick) ->
     gen_server:call(RefName, {sign_in, Nick}).
 
 send(To, Message) ->
-    chat_server:send_message(To, Message).
+    gen_server:call({global, chat_server}, {sendmsg, To, Message}).
+send(RefName, To, Message) ->
+    gen_server:call(RefName, {sendmsg, To, Message}).
 
 list_names() ->
     chat_server:list_names().
@@ -57,6 +59,10 @@ handle_call({sign_in, Name}, _From, State=#state{pid=Pid}) ->
             {reply, already_signed_in, State}
     end;
 
+handle_call({sendmsg, To, Message}, _From, State=#state{pid=Pid}) ->
+    gen_server:call({global, chat_server}, {sendmsg, Pid, To, Message}),
+    {reply, ok, State};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -72,8 +78,8 @@ handle_cast(_Message, State) ->
     {noreply, State}.
 
 
-handle_info({printmsg, Message}, State) ->
-    io:format("You received: ~p~n", [Message]),
+handle_info({printmsg, From, Message}, State) ->
+    io:format("~p says: ~p~n", [From, Message]),
     {noreply, State};
 
 handle_info(_Info, State) ->

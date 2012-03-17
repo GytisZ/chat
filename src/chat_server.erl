@@ -66,10 +66,12 @@ handle_call({sign_in, Nick, Pid}, _From, State = #state{users=_List}) ->
 handle_call(list_names, _From, State=#state{users=_List}) ->
     {reply, ets:match(users, {'$1', '_'}), State};
 
-handle_call({sendmsg, To, Message}, _From, State=#state{users=_List}) ->
+handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
     case ets:match(users, {To, '$1'})  of
         [[Pid]]->
-            Pid ! {printmsg, Message};
+            [[Author]] = ets:match(users, {'$1', From}),
+            Pid ! {printmsg, Author, Message},
+            {reply, ok, State};
         [] -> ok
     end,
     {reply, ok, State}.
