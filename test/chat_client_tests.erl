@@ -24,6 +24,10 @@ send_private_msg_test_() ->
     {"chat_server handles private messages.",
      ?setup(fun send_msg/1)}.
 
+non_existant_nick_test_() ->
+    {"message author is informed of undelivered message.",
+     ?setup(fun non_existant_nick/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -83,6 +87,11 @@ send_msg(_) ->
     [?_assertEqual(ok,
                    chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
 
+non_existant_nick(_) ->
+    chat_client:start(airhead),
+    chat_client:name(airhead, "name"),
+    [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
+     
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%

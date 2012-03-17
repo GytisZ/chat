@@ -71,7 +71,7 @@ handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
         [[Pid]]->
             [[Author]] = ets:match(users, {'$1', From}),
             Pid ! {printmsg, Author, Message};
-        [] -> ok
+        [] -> gen_server:cast(From, {not_found, To})
     end,
     {reply, ok, State};
 

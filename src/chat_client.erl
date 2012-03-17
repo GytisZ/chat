@@ -74,6 +74,10 @@ handle_cast(sign_out, State=#state{name=Nick}) ->
 handle_cast({set_pid, Pid}, State=#state{}) ->
     {noreply, State#state{pid=Pid}};
 
+handle_cast({not_found, To}, State) ->
+    io:format("~p - no such user.", [To]),
+    {noreply, State};
+
 handle_cast(_Message, State) ->
     {noreply, State}.
 
