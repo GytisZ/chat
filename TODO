@@ -1,3 +1,5 @@
-untangle chat_client api, that shit is crazy
-remove macros
-use nick/name consistently throughout the project
+1. Chat client API functions should all take RefName as an argument, that
+shows which client should execute the command.
+2. Chat server shoul detect client crashes and act accordingly.
+3. remove macros
+3. use nick/name consistently throughout the project
