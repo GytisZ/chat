@@ -46,7 +46,7 @@ list_names(ServerName) ->
 
 %% Shut down the server
 shutdown(ServerName) ->
-    gen_server:cast({global, ServerName}, stop).
+    gen_server:call({global, ServerName}, stop).
 
 
 %%% Server functions
@@ -86,6 +86,9 @@ handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
         [] -> gen_server:cast(From, {not_found, To})
     end,
     {reply, ok, State};
+
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
