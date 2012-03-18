@@ -1,3 +1,7 @@
-1. Multiple servers
-2. remove macros
-3. use nick/name consistently throughout the project
+1. TargetServer broadcast about new server
+2. Broadcast receivers and callbacks
+3. Broadcast finalization
+4. ChildServer initiation into the network
+5. online and parenting bools
+6. remove macros
+7. use nick/name consistently throughout the project
