@@ -2,44 +2,34 @@
 -behaviour(gen_server).
 
 %% Public
--export([start/0, start/1, name/2, name/3, send/3, send/4, list_names/1,
-         sign_out/1, sign_out/2]).
+-export([start/1, name/3, send/3, list_names/1, sign_out/1]).
 
 %% Usual OTP goodness
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
 %% State
--record(state, {name, pid, server_name}).
+-record(state, {name, pid, server}).
 %%%%%%%%%%%%%%%%%%
 %%% PUBLIC API %%%
 %%%%%%%%%%%%%%%%%%
 
-start() ->
-    {ok, Pid} = gen_server:start({local, ?MODULE}, ?MODULE, [], []),
-    set_pid(Pid).
 start(RefName) ->
     {ok, Pid} = gen_server:start({local, RefName}, ?MODULE, [], []),
     set_pid(RefName, Pid).
 
     
-name(ServerName, Nick) ->
-    gen_server:call(?MODULE, {sign_in, ServerName, Nick}).
 name(ServerName, RefName, Nick) ->
     gen_server:call(RefName, {sign_in, ServerName, Nick}).
 
-send(ServerName, To, Message) ->
-    gen_server:call({global, ServerName}, {sendmsg, To, Message}).
-send(ServerName, RefName, To, Message) ->
+send(RefName, To, Message) ->
     gen_server:call(RefName, {sendmsg, To, Message}).
 
 list_names(ServerName) ->
     chat_server:list_names(ServerName).
 
-sign_out(ServerName) ->
-    gen_server:cast(?MODULE, {sign_out, ServerName}).
-sign_out(ServerName, RefName) ->
-    gen_server:cast(RefName, {sign_out, ServerName}).
+sign_out(RefName) ->
+    gen_server:cast(RefName, sign_out).
 %%%%%%%%%%%%%%%%%
 %%% CALLBACKS %%%
 %%%%%%%%%%%%%%%%%
@@ -50,7 +40,7 @@ init([]) ->
 
 handle_call({sign_in, Server, Name}, _From, State=#state{pid=Pid}) ->
     case chat_server:sign_in(Server, Name, Pid) of
-        ok -> {reply, ok, State#state{server_name=Server, name=Name}};
+        ok -> {reply, ok, State#state{server=Server, name=Name}};
         name_taken -> 
             io:format("~p is taken. Select a different nick.~n", [Name]),
             {reply, name_taken, State};
@@ -59,15 +49,15 @@ handle_call({sign_in, Server, Name}, _From, State=#state{pid=Pid}) ->
             {reply, already_signed_in, State}
     end;
 
-handle_call({sendmsg, Server, To, Message}, _From, State=#state{pid=Pid}) ->
-    gen_server:call({global, Server}, {sendmsg, Pid, To, Message}),
+handle_call({sendmsg, To, Message}, _From, State=#state{server=S, pid=Pid}) ->
+    gen_server:call({global, S}, {sendmsg, Pid, To, Message}),
     {reply, ok, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
-handle_cast({sign_out, Server}, State=#state{name=Nick}) ->
+handle_cast(sign_out, State=#state{server=Server, name=Nick}) ->
     chat_server:sign_out(Server, Nick),
     {noreply, State};
 
@@ -100,7 +90,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-set_pid(Pid) ->
-    gen_server:cast(?MODULE, {set_pid, Pid}).
 set_pid(RefName, Pid) ->
     gen_server:cast(RefName, {set_pid, Pid}).

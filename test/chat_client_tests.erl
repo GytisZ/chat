@@ -41,10 +41,10 @@ stop(Pid) ->
 %%% ACTUAL TESTS
 
 sign_in_and_out(_) ->
-    chat_client:start(),
-    chat_client:name(foobar, "baliulia"),
+    chat_client:start(baliulia),
+    chat_client:name(foobar, baliulia, "baliulia"),
     List1 = chat_client:list_names(foobar),
-    chat_client:sign_out(foobar),
+    chat_client:sign_out(baliulia),
     List2 = chat_client:list_names(foobar),
     [?_assertEqual([["baliulia"]], List1),
      ?_assertEqual([], List2)]. 
@@ -64,10 +64,10 @@ mult_user(_) ->
     List1 = chat_client:list_names(foobar),
     chat_client:name(foobar, nufnuf, "nufnuf"),
     List2 = chat_client:list_names(foobar),
-    chat_client:sign_out(foobar, nufnuf),
+    chat_client:sign_out(nufnuf),
     List3 = chat_client:list_names(foobar),
-    chat_client:sign_out(foobar, nafnaf),
-    chat_client:sign_out(foobar, nifnif),
+    chat_client:sign_out(nafnaf),
+    chat_client:sign_out(nifnif),
     List4 = chat_client:list_names(foobar),
     [?_assertEqual([["nifnif"], ["nafnaf"]], List1),
      ?_assertEqual([["nufnuf"], ["nifnif"], ["nafnaf"]], List2),
@@ -86,14 +86,12 @@ send_msg(_) ->
     chat_client:name(foobar, r2d2, "R2D2"),
     chat_client:name(foobar, c3po, "C3PO"),
     [?_assertEqual(ok,
-                   chat_client:send(foobar, c3po, "R2D2",
-                                    "Robotas - irgi zmogus."))].
+                   chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
 
 non_existant_nick(_) ->
     chat_client:start(airhead),
     chat_client:name(foobar, airhead, "name"),
-    [?_assertEqual(ok, 
-                   chat_client:send(foobar, airhead, "friend", "message"))].
+    [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
      
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
