@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/1, start_link/2, sign_in/3, sign_out/2,
+-export([start_link/1, start_link/2, sign_in/3, sign_out/2, connect/2, map/1,
          list_names/1, shutdown/1, send_message/3]).
 
 %% not so public
@@ -11,7 +11,7 @@
          terminate/2, code_change/3]).
 
 %% Server state
--record(state, {name=chat_server, max_users=50, 
+-record(state, {name=chat_server, max_users=50, map=sets:new(), 
                 users=ets:new(users, [set, named_table])}).
 
 %%%%%%%%%%%%%%%%%%%
@@ -20,10 +20,15 @@
 
 
 start_link(ServerName) ->
-    gen_server:start_link({global, ServerName}, ?MODULE, [], []).
+    {ok, Pid} = gen_server:start_link({global, ServerName},
+                                      ?MODULE, [{ServerName}], []),
+    gen_server:call({global, ServerName}, init_map),
+    {ok, Pid}.
 
 start_link(ServerName, MaxUsers) ->
-    gen_server:start_link({global, ServerName}, ?MODULE, [MaxUsers], []).
+    gen_server:start_link({global, ServerName}, ?MODULE,
+                          [{ServerName, MaxUsers}], []),
+    gen_server:call({global, ServerName}, init_map).
 
 
 %% Try signing in. Server may refuse if the user name is taken
@@ -43,30 +48,37 @@ send_message(ServerName, Nick, Message) ->
 list_names(ServerName) ->
     gen_server:call({global, ServerName}, list_names).
 
+connect(ServerName, TargetServer) ->
+    gen_server:call({global, ServerName}, {connect, TargetServer}).
+
+map(ServerName) ->
+    erlang:display(gen_server:call({global, ServerName}, showmap)),
+    gen_server:call({global, ServerName}, show_map).
 
 %% Shut down the server
-shutdown(ServerName) ->
-    gen_server:call({global, ServerName}, stop).
+shutdown(ServerName) ->  gen_server:call({global, ServerName}, stop).
 
+%%%%%%%%%%%%%%%%%
+%%% CALLBACKS %%%
+%%%%%%%%%%%%%%%%%
 
-%%% Server functions
+init([{Server}]) ->
+    {ok, #state{name=Server, map=sets:new(),
+                users=ets:new(Server, [set, named_table])}};
 
-init([]) ->
-    {ok, #state{users=ets:new(users, [set, named_table])}};
+init([{Server, MaxUsers}]) ->
+    {ok, #state{name=Server, max_users=MaxUsers, map=sets:new(),
+                users=ets:net(Server, [set, named_table])}}.
 
-init([MaxUsers]) ->
-    {ok, #state{max_users=MaxUsers, users=ets:net(users, [set, named_table])}};
-
-init([ServerName, MaxUsers]) ->
-    {ok, #state{name=ServerName, max_users=MaxUsers,
-                users=ets:net(users, [set, named_table])}}.
+handle_call(init_map, _From, S=#state{name=Server, map=Map}) ->
+    {reply, ok, S#state{map=sets:add_element(Server, Map)}};
 
 handle_call({sign_in, Nick, Pid}, _From, 
-            State = #state{name=Server, users=_List}) ->
-    case {ets:match(users, {Nick, '$1', '_'}),
-          ets:match(users, {'$1', Pid, '_'})} of
+            State = #state{name=Server, users=List}) ->
+    case {ets:match(List, {Nick, '$1', '_'}),
+          ets:match(List, {'$1', Pid, '_'})} of
             {[],[]} -> 
-                ets:insert(users, {Nick, Pid, Server}),
+                ets:insert(List, {Nick, Pid, Server}),
                 erlang:monitor(process, Pid),
                 {reply, ok, State};
             {[], _} ->
@@ -75,13 +87,13 @@ handle_call({sign_in, Nick, Pid}, _From,
                 {reply, name_taken, State}
     end;
 
-handle_call(list_names, _From, State=#state{users=_List}) ->
-    {reply, ets:match(users, {'$1', '_', '_'}), State};
+handle_call(list_names, _From, State=#state{users=List}) ->
+    {reply, ets:match(List, {'$1', '_', '_'}), State};
 
-handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
-    case ets:match(users, {To, '$1', '_'})  of
+handle_call({sendmsg, From, To, Message}, _From, State=#state{users=List}) ->
+    case ets:match(List, {To, '$1', '_'})  of
         [[Pid]]->
-            [[Author]] = ets:match(users, {'$1', From, '_'}),
+            [[Author]] = ets:match(List, {'$1', From, '_'}),
             Pid ! {printmsg, Author, Message};
         [] -> gen_server:cast(From, {not_found, To})
     end,
@@ -90,6 +102,16 @@ handle_call({sendmsg, From, To, Message}, _From, State=#state{users=_List}) ->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
+handle_call({connect, TargetServer}, _From, State=#state{name=Server}) ->
+    gen_server:call({global, TargetServer}, {connecting, Server}),
+    {reply, ok, State};
+
+handle_call({connecting, ChildServer}, _From, State=#state{map=Map}) ->
+    {reply, ok, State#state{map=sets:add_element(ChildServer, Map)}}; 
+
+handle_call(show_map, _From, S=#state{map=Map}) ->
+    {reply, sets:to_list(Map), S};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -97,17 +119,17 @@ handle_call(_Request, _From, State) ->
 handle_cast(stop, State) ->
     {stop, normal, State};
 
-handle_cast({sign_out, Nick}, State=#state{users=_List}) ->
-    ets:delete(users, Nick),
+handle_cast({sign_out, Nick}, State=#state{users=List}) ->
+    ets:delete(List, Nick),
     {noreply, State};
 
 handle_cast(_Message, State) ->
     {noreply, State}.
 
-handle_info({'DOWN', _MRef, process, Pid, _}, State=#state{users=_List}) ->
-    case ets:match(users, {'$1', Pid, '_'}) of
+handle_info({'DOWN', _MRef, process, Pid, _}, State=#state{users=List}) ->
+    case ets:match(List, {'$1', Pid, '_'}) of
         [[Nick]] -> 
-            ets:delete(users, Nick)
+            ets:delete(List, Nick)
     end,
     {noreply, State};
 
