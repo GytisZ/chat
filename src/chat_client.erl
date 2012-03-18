@@ -25,8 +25,8 @@ name(ServerName, RefName, Nick) ->
 send(RefName, To, Message) ->
     gen_server:call(RefName, {sendmsg, To, Message}).
 
-list_names(ServerName) ->
-    chat_server:list_names(ServerName).
+list_names(RefName) ->
+    gen_server:call(RefName, list_names).
 
 sign_out(RefName) ->
     gen_server:cast(RefName, sign_out).
@@ -52,6 +52,9 @@ handle_call({sign_in, Server, Name}, _From, State=#state{pid=Pid}) ->
 handle_call({sendmsg, To, Message}, _From, State=#state{server=S, pid=Pid}) ->
     gen_server:call({global, S}, {sendmsg, Pid, To, Message}),
     {reply, ok, State};
+
+handle_call(list_names, _From, State=#state{server=Server}) ->
+    {reply, chat_server:list_names(Server), State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
