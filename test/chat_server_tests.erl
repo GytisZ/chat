@@ -13,12 +13,12 @@ start_stop_test_() ->
 %%% SETUP FUNCTIONS
 
 start() ->
-    {ok, Pid} = chat_server:start_link(),
+    {ok, Pid} = chat_server:start_link(foobar),
     Pid.
 
 stop(Pid) ->
     MRef = erlang:monitor(process, Pid),
-    chat_server:shutdown(),
+    chat_server:shutdown(foobar),
     receive {'DOWN', MRef, _, _, _} -> ok end.
 
 %%% ACTUAL TESTS

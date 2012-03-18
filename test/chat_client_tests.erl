@@ -31,44 +31,44 @@ non_existant_nick_test_() ->
 %%% SETUP FUNCTIONS
 
 start() ->
-    {ok, Pid} = chat_server:start_link(),
+    {ok, Pid} = chat_server:start_link(foobar),
     Pid.
 
 stop(Pid) ->
     MRef = erlang:monitor(process, Pid),
-    chat_server:shutdown(),
+    chat_server:shutdown(foobar),
     receive {'DOWN', MRef, _, _, _} -> ok end.
 %%% ACTUAL TESTS
 
 sign_in_and_out(_) ->
     chat_client:start(),
-    chat_client:name("baliulia"),
-    List1 = chat_client:list_names(),
-    chat_client:sign_out(),
-    List2 = chat_client:list_names(),
+    chat_client:name(foobar, "baliulia"),
+    List1 = chat_client:list_names(foobar),
+    chat_client:sign_out(foobar),
+    List2 = chat_client:list_names(foobar),
     [?_assertEqual([["baliulia"]], List1),
      ?_assertEqual([], List2)]. 
 
 name_taken(_) ->
     chat_client:start(gytis),
-    chat_client:name(gytis, "Gytis"),
+    chat_client:name(foobar, gytis, "Gytis"),
     chat_client:start(imposter),
-    [?_assertEqual(name_taken, chat_client:name(imposter, "Gytis"))].
+    [?_assertEqual(name_taken, chat_client:name(foobar, imposter, "Gytis"))].
 
 mult_user(_) ->
     chat_client:start(nifnif),
     chat_client:start(nufnuf),
     chat_client:start(nafnaf),
-    chat_client:name(nifnif, "nifnif"),
-    chat_client:name(nafnaf, "nafnaf"),
-    List1 = chat_client:list_names(),
-    chat_client:name(nufnuf, "nufnuf"),
-    List2 = chat_client:list_names(),
-    chat_client:sign_out(nufnuf),
-    List3 = chat_client:list_names(),
-    chat_client:sign_out(nafnaf),
-    chat_client:sign_out(nifnif),
-    List4 = chat_client:list_names(),
+    chat_client:name(foobar, nifnif, "nifnif"),
+    chat_client:name(foobar, nafnaf, "nafnaf"),
+    List1 = chat_client:list_names(foobar),
+    chat_client:name(foobar, nufnuf, "nufnuf"),
+    List2 = chat_client:list_names(foobar),
+    chat_client:sign_out(foobar, nufnuf),
+    List3 = chat_client:list_names(foobar),
+    chat_client:sign_out(foobar, nafnaf),
+    chat_client:sign_out(foobar, nifnif),
+    List4 = chat_client:list_names(foobar),
     [?_assertEqual([["nifnif"], ["nafnaf"]], List1),
      ?_assertEqual([["nufnuf"], ["nifnif"], ["nafnaf"]], List2),
      ?_assertEqual([["nifnif"], ["nafnaf"]], List3),
@@ -76,21 +76,24 @@ mult_user(_) ->
 
 sign_in_twice(_) ->
     chat_client:start(newton),
-    chat_client:name(newton, "Isaac"),
-    [?_assertEqual(already_signed_in, chat_client:name(newton, "Hotpants"))].
+    chat_client:name(foobar, newton, "Isaac"),
+    [?_assertEqual(already_signed_in, 
+                   chat_client:name(foobar, newton, "Hotpants"))].
 
 send_msg(_) ->
     chat_client:start(r2d2),
     chat_client:start(c3po),
-    chat_client:name(r2d2, "R2D2"),
-    chat_client:name(c3po, "C3PO"),
+    chat_client:name(foobar, r2d2, "R2D2"),
+    chat_client:name(foobar, c3po, "C3PO"),
     [?_assertEqual(ok,
-                   chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
+                   chat_client:send(foobar, c3po, "R2D2",
+                                    "Robotas - irgi zmogus."))].
 
 non_existant_nick(_) ->
     chat_client:start(airhead),
-    chat_client:name(airhead, "name"),
-    [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
+    chat_client:name(foobar, airhead, "name"),
+    [?_assertEqual(ok, 
+                   chat_client:send(foobar, airhead, "friend", "message"))].
      
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
