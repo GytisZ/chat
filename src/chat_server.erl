@@ -67,6 +67,7 @@ handle_call({sign_in, Nick, Pid}, _From,
           ets:match(users, {'$1', Pid, '_'})} of
             {[],[]} -> 
                 ets:insert(users, {Nick, Pid, Server}),
+                erlang:monitor(process, Pid),
                 {reply, ok, State};
             {[], _} ->
                 {reply, already_signed_in, State};
@@ -100,8 +101,13 @@ handle_cast({sign_out, Nick}, State=#state{users=_List}) ->
 handle_cast(_Message, State) ->
     {noreply, State}.
 
+handle_info({'DOWN', _MRef, process, Pid, _}, State=#state{users=_List}) ->
+    case ets:match(users, {'$1', Pid, '_'}) of
+        [[Nick]] -> 
+            ets:delete(users, Nick)
+    end,
+    {noreply, State};
 
-%% Placeholders for now
 handle_info(_Msg, State) ->
     {noreply, State}.
 

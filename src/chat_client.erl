@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% Public
--export([start/1, name/3, send/3, list_names/1, sign_out/1]).
+-export([start/1, name/3, send/3, list_names/1, sign_out/1, shutdown/1]).
 
 %% Usual OTP goodness
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -30,6 +30,9 @@ list_names(RefName) ->
 
 sign_out(RefName) ->
     gen_server:cast(RefName, sign_out).
+
+shutdown(RefName) ->
+    gen_server:call(RefName, stop).
 %%%%%%%%%%%%%%%%%
 %%% CALLBACKS %%%
 %%%%%%%%%%%%%%%%%
@@ -55,6 +58,9 @@ handle_call({sendmsg, To, Message}, _From, State=#state{server=S, pid=Pid}) ->
 
 handle_call(list_names, _From, State=#state{server=Server}) ->
     {reply, chat_server:list_names(Server), State};
+
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, State};
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

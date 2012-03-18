@@ -28,6 +28,10 @@ non_existant_nick_test_() ->
     {"message author is informed of undelivered message.",
      ?setup(fun non_existant_nick/1)}.
 
+client_crash_test_() ->
+    {"server should detect client crashes.",
+     ?setup(fun client_crash/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -93,6 +97,11 @@ non_existant_nick(_) ->
     chat_client:name(foobar, airhead, "name"),
     [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
      
+client_crash(_) ->
+    chat_client:start(phantom),
+    chat_client:name(foobar, phantom, "Phantom"),
+    chat_client:shutdown(phantom),
+    [?_assertEqual([], chat_server:list_names(foobar))].
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%
