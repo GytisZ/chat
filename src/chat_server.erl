@@ -3,8 +3,8 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/1, start_link/2, sign_in/3, sign_out/2,
-         list_names/1, shutdown/1, send_message/3]).
+-export([start_link/1, start_link/2, sign_in/3, sign_out/2, connect/2, 
+         network/1, list_names/1, shutdown/1, send_message/3]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -20,7 +20,9 @@
 
 
 start_link(Server) ->
-    gen_server:start_link({global, Server}, ?MODULE, [{Server}], []).
+    {ok, Pid}=gen_server:start_link({global, Server}, ?MODULE, [{Server}], []),
+    register(Server, Pid),
+    {ok, Pid}.
 
 start_link(Server, MaxUsers) ->
     gen_server:start_link({global, Server}, ?MODULE, 
@@ -43,6 +45,12 @@ send_message(Server, Nick, Message) ->
 %% Get the list of all the users currently connected to the server
 list_names(Server) ->
     gen_server:call({global, Server}, list_names).
+
+connect(Server, Target) ->
+    gen_server:cast({global, Target}, {connect, Server}).
+
+network(Server) ->
+    gen_server:call({global, Server}, network).
 
 
 %% Shut down the server
@@ -90,9 +98,30 @@ handle_call({sendmsg, From, To, Message}, _From,
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
+handle_call({new_server, New}, _From, S=#state{map=Map}) ->
+    NewMap = lists:append([New], Map),
+    {reply, ok, S#state{map=NewMap}};
+
+handle_call({init, NewMap, Leader}, _From, S=#state{}) ->
+    {reply, ok, S#state{map=NewMap, leader=Leader}};
+
+handle_call(network, _From, S=#state{name=Server, map=Map, leader=Leader}) ->
+    {reply, {Server, Leader, Map}, S};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+handle_cast({connect, New}, S=#state{name=Server, leader=Leader, map=Map}) ->
+    NewMap = lists:append([New], Map),
+    Recipients = lists:delete(Server, Map),
+    case Leader == Server  of
+        true -> lists:map(fun(T) ->  new_server(New, T) end, Recipients), 
+                gen_server:call({global, New}, {init, NewMap, Leader}),
+                erlang:monitor(process, New),
+                {noreply, S#state{map=NewMap}};
+        false -> gen_server:cast({global, New}, {leader, Leader}),
+                 {noreply, S}
+    end;
 
 handle_cast(stop, State) ->
     {stop, normal, State};
@@ -100,6 +129,10 @@ handle_cast(stop, State) ->
 handle_cast({sign_out, Nick}, State=#state{name=Server, users=_List}) ->
     ets:delete(Server, Nick),
     {noreply, State};
+
+handle_cast({leader, Leader}, S=#state{name=Server}) ->
+    connect(Server, Leader),
+    {noreply, S};
 
 handle_cast(_Message, State) ->
     {noreply, State}.
@@ -120,3 +153,11 @@ terminate(normal, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% HELPER FUNCTIONS %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+new_server(New, Target) ->
+    gen_server:call({global, Target}, {new_server, New}).
