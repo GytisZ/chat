@@ -41,58 +41,58 @@ init([]) ->
     {ok, #state{}}.
 
 
-handle_call({sign_in, Server, Name}, _From, State=#state{pid=Pid}) ->
+handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
     case chat_server:sign_in(Server, Name, Pid) of
-        ok -> {reply, ok, State#state{server=Server, name=Name}};
+        ok -> {reply, ok, S#state{server=Server, name=Name}};
         name_taken -> 
             io:format("~p is taken. Select a different nick.~n", [Name]),
-            {reply, name_taken, State};
+            {reply, name_taken, S};
         already_signed_in ->
             io:format("You are already signed in.~n", []),
-            {reply, already_signed_in, State}
+            {reply, already_signed_in, S}
     end;
 
-handle_call({sendmsg, To, Message}, _From, State=#state{server=S, pid=Pid}) ->
+handle_call({sendmsg, To, Message}, _From, S=#state{server=S, pid=Pid}) ->
     gen_server:call({global, S}, {sendmsg, Pid, To, Message}),
-    {reply, ok, State};
+    {reply, ok, S};
 
-handle_call(list_names, _From, State=#state{server=Server}) ->
-    {reply, chat_server:list_names(Server), State};
+handle_call(list_names, _From, S=#state{server=Server}) ->
+    {reply, chat_server:list_names(Server), S};
 
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State};
+handle_call(stop, _From, S) ->
+    {stop, normal, ok, S};
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(_Request, _From, S) ->
+    {reply, ok, S}.
 
 
-handle_cast(sign_out, State=#state{server=Server, name=Nick}) ->
+handle_cast(sign_out, S=#state{server=Server, name=Nick}) ->
     chat_server:sign_out(Server, Nick),
-    {noreply, State};
+    {noreply, S};
 
-handle_cast({set_pid, Pid}, State=#state{}) ->
-    {noreply, State#state{pid=Pid}};
+handle_cast({set_pid, Pid}, S=#state{}) ->
+    {noreply, S#state{pid=Pid}};
 
-handle_cast({not_found, To}, State) ->
+handle_cast({not_found, To}, S) ->
     io:format("~p - no such user.", [To]),
-    {noreply, State};
+    {noreply, S};
 
-handle_cast(_Message, State) ->
-    {noreply, State}.
+handle_cast(_Message, S) ->
+    {noreply, S}.
 
 
-handle_info({printmsg, From, Message}, State) ->
+handle_info({printmsg, From, Message}, S) ->
     io:format("~p says: ~p~n", [From, Message]),
-    {noreply, State};
+    {noreply, S};
 
-handle_info(_Info, State) ->
-    {noreply, State}.
+handle_info(_Info, S) ->
+    {noreply, S}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, _S) ->
     ok.
 
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+code_change(_OldVsn, S, _Extra) ->
+    {ok, S}.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%
