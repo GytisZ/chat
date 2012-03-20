@@ -52,7 +52,7 @@ shutdown(Server) ->
 
 %%% Server functions
 
-init([Server]) ->
+init([{Server}]) ->
     {ok, #state{name=Server, map=[Server], leader=Server,
                 users=ets:new(Server, [set, named_table])}};
 
