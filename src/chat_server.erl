@@ -100,9 +100,11 @@ handle_call(stop, _From, State) ->
 
 handle_call({new_server, New}, _From, S=#state{map=Map}) ->
     NewMap = lists:append([New], Map),
+    erlang:monitor(process, New),
     {reply, ok, S#state{map=NewMap}};
 
 handle_call({init, NewMap, Leader}, _From, S=#state{}) ->
+    lists:map(fun(Serv) -> erlang:monitor(process, Serv) end, NewMap),
     {reply, ok, S#state{map=NewMap, leader=Leader}};
 
 handle_call(network, _From, S=#state{name=Server, map=Map, leader=Leader}) ->
@@ -137,11 +139,23 @@ handle_cast({leader, Leader}, S=#state{name=Server}) ->
 handle_cast(_Message, State) ->
     {noreply, State}.
 
+handle_info({'DOWN', _MRef, process, {Name, _Node}, _},
+            S=#state{map=Map, leader=Leader}) ->
+    NewMap = lists:delete(Name, Map),
+    case Name == Leader of
+        true -> SortedMap = lists:sort(NewMap),
+                [NewLeader | _ ] = SortedMap;
+        false -> NewLeader = Leader
+    end,
+    {noreply, S#state{map=NewMap, leader=NewLeader}};
+    
+
 handle_info({'DOWN', _MRef, process, Pid, _},
             State=#state{name=Server, users=_List}) ->
     case ets:match(Server, {'$1', Pid, '_'}) of
         [[Nick]] -> 
-            ets:delete(Server, Nick)
+            ets:delete(Server, Nick);
+        true -> ok
     end,
     {noreply, State};
 
