@@ -35,4 +35,4 @@ is_registered(Pid) ->
 server_connect(_) ->
     chat_server:start_link(bar),
     chat_server:connect(foo, bar),
-    [?_assertEqual([bar, foo], chat_server:map(bar))].
+    [?_assertEqual({bar, bar, [foo, bar]}, chat_server:network(bar))].
