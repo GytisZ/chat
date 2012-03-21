@@ -42,7 +42,7 @@ init([]) ->
 
 
 handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
-    case chat_server:sign_in(Server, Name, Pid) of
+    case gen_server:call({global, Server}, {sign_in, Name, Pid}) of
         ok -> {reply, ok, S#state{server=Server, name=Name}};
         name_taken -> 
             io:format("~p is taken. Select a different nick.~n", [Name]),
@@ -67,7 +67,7 @@ handle_call(_Request, _From, S) ->
 
 
 handle_cast(sign_out, S=#state{server=Server, name=Nick}) ->
-    chat_server:sign_out(Server, Nick),
+    gen_server:cast({global, Server}, {sign_out, Nick}),
     {noreply, S};
 
 handle_cast({set_pid, Pid}, S=#state{}) ->

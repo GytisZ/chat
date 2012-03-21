@@ -3,8 +3,8 @@
 -behaviour(gen_server).
 
 %% sort of public
--export([start_link/1, start_link/2, sign_in/3, sign_out/2, connect/2, 
-         network/1, list_names/1, shutdown/1, send_message/3]).
+-export([start_link/1, start_link/2, connect/2, network/1,
+         list_names/1, shutdown/1]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -30,19 +30,6 @@ start_link(Server) ->
 start_link(Server, MaxUsers) ->
     gen_server:start_link({global, Server}, ?MODULE, 
                           [Server, MaxUsers], []).
-
-%% Try signing in. Server may refuse if the user name is taken
-sign_in(Server, Nick, Pid) ->
-    gen_server:call({global, Server}, {sign_in, Nick, Pid}).
-
-
-%% Sign out. This is asynchronous till client will be separated from the server
-sign_out(Server, Nick) ->
-    gen_server:cast({global, Server}, {sign_out, Nick}).
-
-%% Send message
-send_message(Server, Nick, Message) ->
-    gen_server:call({global, Server}, {sendmsg, Nick, Message}).
 
 %% Get the list of all the users currently connected to the server
 list_names(Server) ->
