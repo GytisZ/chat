@@ -133,7 +133,12 @@ handle_cast({connect, New}, S=#state{name=Server, leader=Leader, map=Map}) ->
 handle_cast(stop, S) ->
     {stop, normal, S};
 
-handle_cast({sign_out, Nick}, S=#state{name=Server}) ->
+handle_cast({sign_out, Nick}, S=#state{map=Map}) ->
+    lists:map(fun(T) ->
+                gen_server:cast({global, T}, {user_left, Nick}) end, Map),
+    {noreply, S};
+
+handle_cast({user_left, Nick}, S=#state{name=Server}) ->
     ets:delete(Server, Nick),
     {noreply, S};
 
