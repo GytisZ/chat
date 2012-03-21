@@ -14,8 +14,7 @@
 -record(state, {name=chat_server,
                 max_users=50,
                 map,
-                leader,
-                users=ets:new(chat_server, [set, named_table])}).
+                leader}).
 
 %%%%%%%%%%%%%%%%%%%
 %%% PUBLIC API %%%%
@@ -52,21 +51,19 @@ shutdown(Server) ->
 %%%%%%%%%%%%%%%%%
 
 init([{Server}]) ->
+    ets:new(Server, [set, named_table]),
     {ok, #state{name=Server,
                 map=[Server],
-                leader=Server,
-                users=ets:new(Server, [set, named_table])}};
+                leader=Server}};
 
 init([{Server, MaxUsers}]) ->
+    ets:new(Server, [set, named_tabled]),
     {ok, #state{name=Server,
                 map=[Server],
                 leader=Server,
-                max_users=MaxUsers,
-                users=ets:new(Server, [set, named_table])}}.
+                max_users=MaxUsers}}.
 
-handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server,
-                                                   map=Map,
-                                                   users=_List}) ->
+handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server, map=Map}) ->
     Forward = lists:delete(Server, Map),
     case {ets:match(Server, {Nick, '$1', '_'}),
           ets:match(Server, {'$1', Pid, '_'})} of
@@ -87,11 +84,10 @@ handle_call({new_user, NewUser}, _From, S=#state{name=Server}) ->
     {reply, ok, S};
 
 
-handle_call(list_names, _From, S=#state{name=Server, users=_List}) ->
+handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
 
-handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server,
-                                                          users=_List}) ->
+handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
     case ets:match(Server, {To, '$1', '_'})  of
         [[Pid]]->
             [[Author]] = ets:match(Server, {'$1', From, '_'}),
@@ -137,7 +133,7 @@ handle_cast({connect, New}, S=#state{name=Server, leader=Leader, map=Map}) ->
 handle_cast(stop, S) ->
     {stop, normal, S};
 
-handle_cast({sign_out, Nick}, S=#state{name=Server, users=_List}) ->
+handle_cast({sign_out, Nick}, S=#state{name=Server}) ->
     ets:delete(Server, Nick),
     {noreply, S};
 
@@ -159,8 +155,7 @@ handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
     {noreply, S#state{map=NewMap, leader=NewLeader}};
 
 
-handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{name=Server,
-                                                       users=_List}) ->
+handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{name=Server}) ->
     case ets:match(Server, {'$1', Pid, '_'}) of
         [[Nick]] -> 
             ets:delete(Server, Nick);
