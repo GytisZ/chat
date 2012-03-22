@@ -52,8 +52,8 @@ handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
             {reply, already_signed_in, S}
     end;
 
-handle_call({sendmsg, To, Message}, _From, S=#state{server=S, pid=Pid}) ->
-    gen_server:call({global, S}, {sendmsg, Pid, To, Message}),
+handle_call({sendmsg, To, Message}, _From, S=#state{server=Server, pid=Pid}) ->
+    gen_server:call({global, Server}, {sendmsg, Pid, To, Message}),
     {reply, ok, S};
 
 handle_call(list_names, _From, S=#state{server=Server}) ->

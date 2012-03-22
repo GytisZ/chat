@@ -88,10 +88,12 @@ handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
 
 handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
-    case ets:match(Server, {To, '$1', '_'})  of
-        [[Pid]]->
-            [[Author]] = ets:match(Server, {'$1', From, '_'}),
+    [[Author]] = ets:match(Server, {'$1', From, '_'}),
+    case ets:match(Server, {To, '$1', '$2'})  of
+        [[Pid, Server]]->
             Pid ! {printmsg, Author, Message};
+        [[_, Host]] -> 
+            gen_server:call({global, Host}, {sendmsg, From, To, Message});
         [] -> gen_server:cast(From, {not_found, To})
     end,
     {reply, ok, S};
