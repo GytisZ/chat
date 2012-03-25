@@ -40,6 +40,10 @@ list_channels_test_() ->
     {"client can see a list of channels.",
      ?setup(fun list_channels/1)}.
 
+join_channel_test_() ->
+    {"client can join a channel.",
+     ?setup(fun join_channel/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -130,6 +134,15 @@ list_channels(_) ->
     Channels = chat_client:list_channels(foo),
     chat_client:shutdown(foo),
     [?_assertEqual([[haskell], [erlang]], Channels)].
+
+join_channel(_) ->
+    chat_client:start(foo),
+    chat_client:name(foobar, foo, "Bar"),
+    chat_client:create(foo, erlang),
+    chat_client:join(foo, erlang),
+    Users = chat_client:list_ch_users(foo, erlang),
+    chat_client:shutdown(foo),
+    [?_assertEqual([["Bar"]], Users)].
     
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%

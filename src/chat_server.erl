@@ -93,14 +93,17 @@ handle_call({new_user, NewUser}, _From, S=#state{name=Server}) ->
     {reply, ok, S};
 
 handle_call({new_channel, Channel}, _From, S=#state{channels=ChTbl}) ->
-    ets:insert(ChTbl, {Channel}),
+    ets:insert(ChTbl, {Channel, []}),
     {reply, ok, S};
 
 handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
 
 handle_call(list_ch, _From, S=#state{channels=Ch}) ->
-    {reply, ets:match(Ch, {'$1'}), S};
+    {reply, ets:match(Ch, {'$1', '_'}), S};
+
+handle_call({list_ch_users, Channel}, _From, S=#state{channels=ChTbl}) ->
+    {reply, ets:match(ChTbl, {Channel, '$1'}), S};
 
 handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
@@ -167,15 +170,21 @@ handle_cast({create, Channel}, S=#state{name=Server,
                                         map=Map,
                                         channels=ChTbl}) ->
     Forward = lists:delete(Server, Map),
-    case ets:match(ChTbl, {Channel}) of
+    case ets:match(ChTbl, {Channel, '_'}) of
         [] -> 
-            ets:insert(ChTbl, {Channel}),
+            ets:insert(ChTbl, {Channel, []}),
             lists:map(fun(Serv) ->
                         new_channel(Channel, Serv) end, Forward),
             {noreply, S};
         [_] ->
             {noreply, S}
-    end.
+    end;
+
+handle_cast({join, Name, Channel}, S=#state{channels=ChTbl}) ->
+    CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
+    NewUsers = lists:append(CurrentUsers, Name),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    {noreply, S}.
 
 handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
                                                              leader=Leader}) ->
