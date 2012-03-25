@@ -1,5 +1,6 @@
-1. joins propagate across the server
-2. when server goes down, users should be deleted from the lists
-3. server name clashes
-4. remove macros
-5. use nick/name consistently throughout the project
+1. users can send messages to channels
+2. users can delete channels
+3. when server goes down, users should be deleted from the lists
+4. server name clashes
+5. remove macros
+6. use nick/name consistently throughout the project

@@ -27,6 +27,10 @@ channels_propagate_test_() ->
     {"Channels propagate accross the cluster.",
      ?setup(fun channels_propagate/1)}.
 
+network_channel_test_() ->
+    {"channels are global.",
+     ?setup(fun network_channel/1)}.
+
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -115,3 +119,27 @@ channels_propagate(_) ->
     chat_server:shutdown(bar),
     chat_server:shutdown(baz),
     [?_assertEqual([[irssi], [erlang]], Channels)].
+
+network_channel(_) ->
+    chat_server:start_link(bar),
+    chat_server:connect(foo, bar),
+    timer:sleep(50),
+    chat_client:start(baz),
+    chat_client:name(foo, baz, "baz"),
+    chat_client:start(qux),
+    chat_client:name(bar, qux, "qux"),
+    chat_client:create(baz, baras),
+    chat_client:create(baz, viktorina),
+    chat_client:join(baz, baras),
+    timer:sleep(50),
+    chat_client:join(baz, viktorina),
+    timer:sleep(50),
+    chat_client:join(qux, baras),
+    timer:sleep(50),
+    List1 = chat_client:list_ch_users(baz, baras),
+    List2 = chat_client:list_ch_users(qux, viktorina),
+    chat_client:shutdown(baz),
+    chat_client:shutdown(qux),
+    chat_server:shutdown(bar),
+    [?_assertEqual([[["baz", "qux"]]], List1),
+     ?_assertEqual([[["baz"]]], List2)].

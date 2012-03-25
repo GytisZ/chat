@@ -124,6 +124,12 @@ handle_call({new_server, New}, _From, S=#state{map=Map}) ->
     erlang:monitor(process, New),
     {reply, ok, S#state{map=NewMap}};
 
+handle_call({new_join, {Name, Channel}}, _From, S=#state{channels=ChTbl}) ->
+    CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
+    NewUsers = lists:append(CurrentUsers, [Name]),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    {reply, ok, S};
+
 handle_call({init, NewMap, Leader}, _From, S=#state{}) ->
     lists:map(fun(Serv) -> erlang:monitor(process, Serv) end, NewMap),
     {reply, ok, S#state{map=NewMap, leader=Leader}};
@@ -180,9 +186,14 @@ handle_cast({create, Channel}, S=#state{name=Server,
             {noreply, S}
     end;
 
-handle_cast({join, Name, Channel}, S=#state{channels=ChTbl}) ->
+handle_cast({join, Name, Channel}, S=#state{name=Server, 
+                                            map=Map,
+                                            channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:append(CurrentUsers, [Name]),
+    Forward = lists:delete(Server, Map),
+    lists:map(fun(Serv) ->
+                new_join({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S}.
 
@@ -227,3 +238,6 @@ new_user(New, Target) ->
 
 new_channel(New, Target) ->
     gen_server:call({global, Target}, {new_channel, New}).
+
+new_join(New, Target) ->
+    gen_server:call({global, Target}, {new_join, New}).
