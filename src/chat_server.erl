@@ -182,7 +182,7 @@ handle_cast({create, Channel}, S=#state{name=Server,
 
 handle_cast({join, Name, Channel}, S=#state{channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
-    NewUsers = lists:append(CurrentUsers, Name),
+    NewUsers = lists:append(CurrentUsers, [Name]),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S}.
 

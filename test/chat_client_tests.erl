@@ -142,7 +142,7 @@ join_channel(_) ->
     chat_client:join(foo, erlang),
     Users = chat_client:list_ch_users(foo, erlang),
     chat_client:shutdown(foo),
-    [?_assertEqual([["Bar"]], Users)].
+    [?_assertEqual([[["Bar"]]], Users)].
     
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
