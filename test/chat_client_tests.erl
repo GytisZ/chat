@@ -36,6 +36,10 @@ create_channel_test_() ->
     {"client can create chat channels.",
      ?setup(fun create_channel/1)}.
 
+list_channels_test_() ->
+    {"client can see a list of channels.",
+     ?setup(fun list_channels/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -117,6 +121,16 @@ create_channel(_) ->
     Channels = chat_server:list_channels(foobar),
     chat_client:shutdown(gytis),
     [?_assertEqual([[erlang]], Channels)].
+
+list_channels(_) ->
+    chat_client:start(foo),
+    chat_client:name(foobar, foo, "Bar"),
+    chat_client:create(foo, erlang),
+    chat_client:create(foo, haskell),
+    Channels = chat_client:list_channels(foo),
+    chat_client:shutdown(foo),
+    [?_assertEqual([[haskell], [erlang]], Channels)].
+    
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%

@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start/1, name/3, send/3, list_names/1, create/2,
+-export([start/1, name/3, send/3, list_names/1, create/2, list_channels/1,
          sign_out/1, shutdown/1]).
 
 %% gen_server callbacks
@@ -48,6 +48,14 @@ send(RefName, To, Message) ->
 list_names(RefName) ->
     gen_server:call(RefName, list_names).
 
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Lists the available channels
+%% @end
+%% --------------------------------------------------------------------- 
+list_channels(RefName) ->
+    gen_server:call(RefName, list_channels).
+
 create(RefName, Channel) ->
     gen_server:call(RefName, {create, Channel}).
 
@@ -84,6 +92,9 @@ handle_call({sendmsg, To, Message}, _From, S=#state{server=Server, pid=Pid}) ->
 
 handle_call(list_names, _From, S=#state{server=Server}) ->
     {reply, chat_server:list_names(Server), S};
+
+handle_call(list_channels, _From, S=#state{server=Server}) ->
+    {reply, chat_server:list_channels(Server), S};
 
 handle_call({create, Channel}, _From, S=#state{server=Server}) ->
     gen_server:cast({global, Server}, {create, Channel}),

@@ -1,4 +1,4 @@
-1. client can list chat channels
+1. chat channels propagate accross network
 2. when server goes down, users should be deleted from the lists
 3. server name clashes
 4. remove macros
