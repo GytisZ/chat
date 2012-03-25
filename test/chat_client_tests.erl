@@ -32,6 +32,10 @@ client_crash_test_() ->
     {"server should detect client crashes.",
      ?setup(fun client_crash/1)}.
 
+create_channel_test_() ->
+    {"client can create chat channels.",
+     ?setup(fun create_channel/1)}.
+
 %%% SETUP FUNCTIONS
 
 start() ->
@@ -57,7 +61,10 @@ name_taken(_) ->
     chat_client:start(gytis),
     chat_client:name(foobar, gytis, "Gytis"),
     chat_client:start(imposter),
-    [?_assertEqual(name_taken, chat_client:name(foobar, imposter, "Gytis"))].
+    Response = chat_client:name(foobar, imposter, "Gytis"),
+    chat_client:shutdown(gytis),
+    chat_client:shutdown(imposter),
+    [?_assertEqual(name_taken, Response)].
 
 mult_user(_) ->
     chat_client:start(nifnif),
@@ -102,6 +109,14 @@ client_crash(_) ->
     chat_client:name(foobar, phantom, "Phantom"),
     chat_client:shutdown(phantom),
     [?_assertEqual([], chat_server:list_names(foobar))].
+
+create_channel(_) ->
+    chat_client:start(gytis),
+    chat_client:name(foobar, gytis, "Gytis"),
+    chat_client:create(gytis, erlang),
+    Channels = chat_server:list_channels(foobar),
+    chat_client:shutdown(gytis),
+    [?_assertEqual([[erlang]], Channels)].
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%

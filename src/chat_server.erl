@@ -4,7 +4,7 @@
 
 %% sort of public
 -export([start_link/1, start_link/2, connect/2, network/1,
-         list_names/1, shutdown/1]).
+         list_names/1, list_channels/1, shutdown/1]).
 
 %% not so public
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -14,7 +14,8 @@
 -record(state, {name=chat_server,
                 max_users=50,
                 map,
-                leader}).
+                leader,
+                channels}).
 
 %%%%%%%%%%%%%%%%%%%
 %%% PUBLIC API %%%%
@@ -34,6 +35,9 @@ start_link(Server, MaxUsers) ->
 list_names(Server) ->
     gen_server:call({global, Server}, list_names).
 
+list_channels(Server) ->
+    gen_server:call({global, Server}, list_ch).
+
 %% Connect Server to the Target server and its' cluster
 connect(Server, Target) ->
     gen_server:cast({global, Target}, {connect, Server}).
@@ -51,13 +55,18 @@ shutdown(Server) ->
 %%%%%%%%%%%%%%%%%
 
 init([{Server}]) ->
+    ChannelsTable = list_to_atom(atom_to_list(Server) ++ "_ch"),
     ets:new(Server, [set, named_table]),
+    ets:new(ChannelsTable, [set, named_table]),
     {ok, #state{name=Server,
                 map=[Server],
-                leader=Server}};
+                leader=Server,
+                channels=ChannelsTable}};
 
 init([{Server, MaxUsers}]) ->
-    ets:new(Server, [set, named_tabled]),
+    ChannelsTable = list_to_atom(atom_to_list(Server) ++ "_ch"),
+    ets:new(Server, [set, named_table]),
+    ets:new(ChannelsTable, [set, named_table]),
     {ok, #state{name=Server,
                 map=[Server],
                 leader=Server,
@@ -86,6 +95,9 @@ handle_call({new_user, NewUser}, _From, S=#state{name=Server}) ->
 
 handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
+
+handle_call(list_ch, _From, S=#state{channels=Ch}) ->
+    {reply, ets:match(Ch, {'$1'}), S};
 
 handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
@@ -148,7 +160,9 @@ handle_cast({leader, Leader}, S=#state{name=Server}) ->
     connect(Server, Leader),
     {noreply, S};
 
-handle_cast(_Message, S) ->
+
+handle_cast({create, Channel}, S=#state{channels=ChTbl}) ->
+    ets:insert(ChTbl, {Channel}),
     {noreply, S}.
 
 handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
