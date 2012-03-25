@@ -92,6 +92,9 @@ handle_call({new_user, NewUser}, _From, S=#state{name=Server}) ->
     ets:insert(Server, NewUser),
     {reply, ok, S};
 
+handle_call({new_channel, Channel}, _From, S=#state{channels=ChTbl}) ->
+    ets:insert(ChTbl, {Channel}),
+    {reply, ok, S};
 
 handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
@@ -160,10 +163,19 @@ handle_cast({leader, Leader}, S=#state{name=Server}) ->
     connect(Server, Leader),
     {noreply, S};
 
-
-handle_cast({create, Channel}, S=#state{channels=ChTbl}) ->
-    ets:insert(ChTbl, {Channel}),
-    {noreply, S}.
+handle_cast({create, Channel}, S=#state{name=Server,
+                                        map=Map,
+                                        channels=ChTbl}) ->
+    Forward = lists:delete(Server, Map),
+    case ets:match(ChTbl, {Channel}) of
+        [] -> 
+            ets:insert(ChTbl, {Channel}),
+            lists:map(fun(Serv) ->
+                        new_channel(Channel, Serv) end, Forward),
+            {noreply, S};
+        [_] ->
+            {noreply, S}
+    end.
 
 handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
                                                              leader=Leader}) ->
@@ -203,3 +215,6 @@ new_server(New, Target) ->
 
 new_user(New, Target) ->
     gen_server:call({global, Target}, {new_user, New}).
+
+new_channel(New, Target) ->
+    gen_server:call({global, Target}, {new_channel, New}).

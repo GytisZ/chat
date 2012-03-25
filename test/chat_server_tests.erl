@@ -23,6 +23,10 @@ users_on_other_servers_test_() ->
     {"User tables should be updated on all servers.",
      ?setup(fun user_table_updates/1)}.
 
+channels_propagate_test_() ->
+    {"Channels propagate accross the cluster.",
+     ?setup(fun channels_propagate/1)}.
+
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%
@@ -46,7 +50,9 @@ is_registered(Pid) ->
 server_connect(_) ->
     chat_server:start_link(bar),
     chat_server:connect(foo, bar),
-    [?_assertEqual({bar, bar, [foo, bar]}, chat_server:network(bar))].
+    Channels = chat_server:network(bar),
+    chat_server:shutdown(bar),
+    [?_assertEqual({bar, bar, [foo, bar]}, Channels)].
 
 multiple_servers(_) ->
     {ok, Pid} = chat_server:start_link(man),
@@ -89,3 +95,23 @@ user_table_updates(_) ->
     [?_assertEqual([["Petras"], ["Jonas"], ["Karolis"]], List1),
      ?_assertEqual([["Petras"], ["Jonas"], ["Karolis"]], List2),
      ?_assertEqual([["Petras"], ["Jonas"], ["Karolis"]], List3)].
+
+channels_propagate(_) ->
+    chat_server:start_link(bar),
+    chat_server:start_link(baz),
+    chat_server:connect(foo, bar),
+    timer:sleep(50),
+    chat_server:connect(baz, foo),
+    chat_client:start(qux),
+    chat_client:name(foo, qux, "Quux"),
+    chat_client:create(qux, erlang),
+    chat_client:create(qux, irssi),
+    timer:sleep(50),
+    chat_client:start(kinzaza),
+    chat_client:name(baz, kinzaza, "kinzaza"),
+    Channels = chat_client:list_channels(kinzaza),
+    chat_client:shutdown(kinzaza),
+    chat_client:shutdown(qux),
+    chat_server:shutdown(bar),
+    chat_server:shutdown(baz),
+    [?_assertEqual([[irssi], [erlang]], Channels)].

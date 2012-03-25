@@ -1,4 +1,4 @@
-1. chat channels propagate accross network
+1. players can join channels on a local server
 2. when server goes down, users should be deleted from the lists
 3. server name clashes
 4. remove macros
