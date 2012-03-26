@@ -64,7 +64,7 @@ stop(Pid) ->
 
 sign_in_and_out(_) ->
     chat_client:start(baliulia),
-    chat_client:name(foobar, baliulia, "baliulia"),
+    chat_client:sign_in(foobar, baliulia, "baliulia"),
     List1 = chat_client:list_names(baliulia),
     chat_client:sign_out(baliulia),
     timer:sleep(50),
@@ -74,9 +74,9 @@ sign_in_and_out(_) ->
 
 name_taken(_) ->
     chat_client:start(gytis),
-    chat_client:name(foobar, gytis, "Gytis"),
+    chat_client:sign_in(foobar, gytis, "Gytis"),
     chat_client:start(imposter),
-    Response = chat_client:name(foobar, imposter, "Gytis"),
+    Response = chat_client:sign_in(foobar, imposter, "Gytis"),
     chat_client:shutdown(gytis),
     chat_client:shutdown(imposter),
     [?_assertEqual(name_taken, Response)].
@@ -85,10 +85,10 @@ mult_user(_) ->
     chat_client:start(nifnif),
     chat_client:start(nufnuf),
     chat_client:start(nafnaf),
-    chat_client:name(foobar, nifnif, "nifnif"),
-    chat_client:name(foobar, nafnaf, "nafnaf"),
+    chat_client:sign_in(foobar, nifnif, "nifnif"),
+    chat_client:sign_in(foobar, nafnaf, "nafnaf"),
     List1 = chat_client:list_names(nifnif),
-    chat_client:name(foobar, nufnuf, "nufnuf"),
+    chat_client:sign_in(foobar, nufnuf, "nufnuf"),
     List2 = chat_client:list_names(nifnif),
     chat_client:sign_out(nufnuf),
     timer:sleep(50),
@@ -104,32 +104,32 @@ mult_user(_) ->
 
 sign_in_twice(_) ->
     chat_client:start(newton),
-    chat_client:name(foobar, newton, "Isaac"),
+    chat_client:sign_in(foobar, newton, "Isaac"),
     [?_assertEqual(already_signed_in, 
-                   chat_client:name(foobar, newton, "Hotpants"))].
+                   chat_client:sign_in(foobar, newton, "Hotpants"))].
 
 send_msg(_) ->
     chat_client:start(r2d2),
     chat_client:start(c3po),
-    chat_client:name(foobar, r2d2, "R2D2"),
-    chat_client:name(foobar, c3po, "C3PO"),
+    chat_client:sign_in(foobar, r2d2, "R2D2"),
+    chat_client:sign_in(foobar, c3po, "C3PO"),
     [?_assertEqual(ok,
                    chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
 
 non_existant_nick(_) ->
     chat_client:start(airhead),
-    chat_client:name(foobar, airhead, "name"),
+    chat_client:sign_in(foobar, airhead, "name"),
     [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
      
 client_crash(_) ->
     chat_client:start(phantom),
-    chat_client:name(foobar, phantom, "Phantom"),
+    chat_client:sign_in(foobar, phantom, "Phantom"),
     chat_client:shutdown(phantom),
     [?_assertEqual([], chat_server:list_names(foobar))].
 
 create_channel(_) ->
     chat_client:start(gytis),
-    chat_client:name(foobar, gytis, "Gytis"),
+    chat_client:sign_in(foobar, gytis, "Gytis"),
     chat_client:create(gytis, erlang),
     Channels = chat_server:list_channels(foobar),
     chat_client:shutdown(gytis),
@@ -137,7 +137,7 @@ create_channel(_) ->
 
 list_channels(_) ->
     chat_client:start(foo),
-    chat_client:name(foobar, foo, "Bar"),
+    chat_client:sign_in(foobar, foo, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:create(foo, haskell),
     Channels = chat_client:list_channels(foo),
@@ -146,7 +146,7 @@ list_channels(_) ->
 
 join_channel(_) ->
     chat_client:start(foo),
-    chat_client:name(foobar, foo, "Bar"),
+    chat_client:sign_in(foobar, foo, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:join(foo, erlang),
     Users = chat_client:list_ch_users(foo, erlang),
@@ -155,7 +155,7 @@ join_channel(_) ->
 
 send_channel(_) ->
     chat_client:start(foo),
-    chat_client:name(foobar, foo, "Bar"),
+    chat_client:sign_in(foobar, foo, "Bar"),
     chat_client:create(foo, kanalas),
     chat_client:join(foo, kanalas),
     chat_client:send_channel(foo, kanalas, "Hello world"),

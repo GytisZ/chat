@@ -8,9 +8,8 @@
 8. all list_users etc. functions should be uniform
 9. implement channel not found
 10. figure out how to avoid using timer:sleep in tests
-11. route private messages through servers
-12. stop sending printmsg through handle_info
-13. implement max_users
-14. implement load balancing
-15. remove macros
-16. use nick/name consistently throughout the project
+11. stop sending printmsg through handle_info
+12. implement max_users
+13. implement load balancing
+14. remove macros
+15. use nick/name consistently throughout the project

@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start/1, name/3, send/3, list_names/1, create/2, list_channels/1,
+-export([start/1, sign_in/3, send/3, list_names/1, create/2, list_channels/1,
          sign_out/1, shutdown/1, join/2, list_ch_users/2, leave/2,
          send_channel/3]).
 
@@ -34,8 +34,8 @@ start(RefName) ->
 %% @end
 %% TODO: change the name into something more appropriate
 %% --------------------------------------------------------------------- 
--spec name(atom(), atom(), string()) -> ok.
-name(ServerName, RefName, Nick) ->
+-spec sign_in(atom(), atom(), string()) -> ok.
+sign_in(ServerName, RefName, Nick) ->
     gen_server:call(RefName, {sign_in, ServerName, Nick}).
 
 %% --------------------------------------------------------------------- 
