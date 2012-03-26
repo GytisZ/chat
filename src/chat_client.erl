@@ -179,9 +179,8 @@ handle_cast({not_found, To}, S) ->
 handle_cast(_Message, S) ->
     {noreply, S}.
 
-
-handle_info({printmsg, From, Message}, S) ->
-    io:format("~p says: ~p~n", [From, Message]),
+handle_info({msg, {priv, From, Message}}, S) ->
+    io:format("~p >>> ~p~n", [From, Message]),
     {noreply, S};
 
 handle_info({msg, {ch, Name, Ch, Message}}, S) ->

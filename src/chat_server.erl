@@ -18,11 +18,15 @@
                 leader,
                 channels}).
 
-%%%%%%%%%%%%%%%%%%%
-%%% PUBLIC API %%%%
-%%%%%%%%%%%%%%%%%%%
+%% ===================================================================== 
+%% Public API
+%% ===================================================================== 
 
-
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Start server, optional second argument sets user limit
+%% @end
+%% --------------------------------------------------------------------- 
 start_link(Server) ->
     {ok, Pid}=gen_server:start_link({global, Server}, ?MODULE, [{Server}], []),
     register(Server, Pid),
@@ -32,28 +36,49 @@ start_link(Server, MaxUsers) ->
     gen_server:start_link({global, Server}, ?MODULE, 
                           [Server, MaxUsers], []).
 
-%% Get the list of all the users currently connected to the server
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Get the list of all the users currently connected to the cluster
+%% @end
+%% --------------------------------------------------------------------- 
 list_names(Server) ->
     gen_server:call({global, Server}, list_names).
 
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Get the list of all active channels
+%% @end
+%% --------------------------------------------------------------------- 
 list_channels(Server) ->
     gen_server:call({global, Server}, list_ch).
 
+%% --------------------------------------------------------------------- 
+%% @doc
 %% Connect Server to the Target server and its' cluster
+%% @end
+%% --------------------------------------------------------------------- 
 connect(Server, Target) ->
     gen_server:cast({global, Server}, {connect, Target}).
 
+%% --------------------------------------------------------------------- 
+%% @doc
 %% Show who is the current leader and what servers are online
+%% @end
+%% --------------------------------------------------------------------- 
 network(Server) ->
     gen_server:call({global, Server}, network).
 
+%% --------------------------------------------------------------------- 
+%% @doc
 %% Shut down the server
+%% @end
+%% --------------------------------------------------------------------- 
 shutdown(Server) ->
     gen_server:call({global, Server}, stop).
 
-%%%%%%%%%%%%%%%%%
-%%% CALLBACKS %%%
-%%%%%%%%%%%%%%%%%
+%% ===================================================================== 
+%% gen_server callbacks
+%% ===================================================================== 
 
 init([{Server}]) ->
     ChannelsTable = create_table(Server, "_ch"),
@@ -85,8 +110,8 @@ handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server, map=STbl}) ->
           ets:match(Server, {'$1', Pid, '_'})} of
         {[],[]} -> 
             ets:insert(Server, {Nick, Pid, Server}),
-            lists:map(fun(Serv) ->
-                        new_user({Nick, Pid, Server}, Serv) end, Forward),
+            lists:map(fun([Serv]) ->
+                        new(user, {Nick, Pid, Server}, Serv) end, Forward),
             erlang:monitor(process, Pid),
             {reply, ok, S};
         {[], _} ->
@@ -95,11 +120,11 @@ handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server, map=STbl}) ->
             {reply, name_taken, S}
     end;
 
-handle_call({new_user, NewUser}, _From, S=#state{name=Server}) ->
+handle_call({user, NewUser}, _From, S=#state{name=Server}) ->
     ets:insert(Server, NewUser),
     {reply, ok, S};
 
-handle_call({new_channel, Channel}, _From, S=#state{channels=ChTbl}) ->
+handle_call({channel, Channel}, _From, S=#state{channels=ChTbl}) ->
     ets:insert(ChTbl, {Channel, []}),
     {reply, ok, S};
 
@@ -112,13 +137,11 @@ handle_call(list_ch, _From, S=#state{channels=Ch}) ->
 handle_call({list_ch_users, Channel}, _From, S=#state{channels=ChTbl}) ->
     {reply, ets:match(ChTbl, {Channel, '$1'}), S};
 
-handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
+handle_call({sendmsg, From, To, Msg}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
-    case ets:match(Server, {To, '$1', '$2'})  of
-        [[Pid, Server]]->
-            Pid ! {printmsg, Author, Message};
-        [[_, Host]] -> 
-            gen_server:call({global, Host}, {sendmsg, From, To, Message});
+    case ets:match(Server, {To, '_', '$2'})  of
+        [[Host]]->
+            gen_server:cast({global, Host}, {msg, To, {priv, Author, Msg}});
         [] -> gen_server:cast(From, {not_found, To})
     end,
     {reply, ok, S};
@@ -126,8 +149,8 @@ handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
 handle_call(stop, _From, S) ->
     {stop, normal, ok, S};
 
-handle_call({new_server, New, Node}, _From, S=#state{map=STbl}) ->
-    ets:insert(STbl, {New, Node, 50}),
+handle_call({server, {New, Node, MaxUsers}}, _From, S=#state{map=STbl}) ->
+    ets:insert(STbl, {New, Node, MaxUsers}),
     erlang:monitor(process, {New, Node}),
     {reply, ok, S};
 
@@ -149,23 +172,30 @@ handle_call(network, _From, S=#state{name=Server, map=STbl, leader=Leader}) ->
 handle_call(_Request, _From, S) ->
     {reply, ok, S}.
 
+%% ---------------------------------------------------------------------  
+%% @private
+%% @doc
 %% Create a new map with the connecting server appended and send it to
 %% every other server on the network. Forward the request to the leader
 %% if the server contacted wasn't the leader.
-
-handle_cast({connect, Target}, S=#state{name=Server, node=Node}) ->
-    gen_server:cast({global, Target}, {connect, Server, Node}),
+%% @end
+%% --------------------------------------------------------------------- 
+handle_cast({connect, Target}, S=#state{name=Server,
+                                        node=Node,
+                                        max_users=MaxUsers}) ->
+    gen_server:cast({global, Target}, {connect, Server, Node, MaxUsers}),
     {noreply, S};
 
-handle_cast({connect, New, Node}, S=#state{name=Server, 
-                                           leader=Leader, 
-                                           map=STbl}) ->
+handle_cast({connect, New, Node, MaxUsers}, S=#state{name=Server, 
+                                                     leader=Leader, 
+                                                     map=STbl}) ->
     Map = create_map(STbl),
-    ets:insert(STbl, {New, Node, 50}),
+    ets:insert(STbl, {New, Node, MaxUsers}),
     Recipients = lists:delete([Server], Map),
     case Leader == Server  of
         true -> 
-            lists:map(fun([T]) -> new_server(New, Node,  T) end, Recipients), 
+            lists:map(fun([T]) -> 
+                       new(server, {New, Node, MaxUsers}, T) end, Recipients), 
             gen_server:cast({global, New}, {init, ets:tab2list(STbl), Leader}),
             erlang:monitor(process, {New, Node}),
             {noreply, S};
@@ -207,7 +237,7 @@ handle_cast({create, Channel}, S=#state{name=Server,
         [] -> 
             ets:insert(ChTbl, {Channel, []}),
             lists:map(fun([Serv]) ->
-                        new_channel(Channel, Serv) end, Forward),
+                        new(channel, Channel, Serv) end, Forward),
             {noreply, S};
         [_] ->
             {noreply, S}
@@ -221,7 +251,7 @@ handle_cast({join, Name, Channel}, S=#state{name=Server,
     NewUsers = lists:append(CurrentUsers, [Name]),
     Forward = lists:delete([Server], Map),
     lists:map(fun([Serv]) ->
-                new_join({Name, Channel}, Serv) end, Forward),
+                new(new_join, {Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     gen_server:cast({global, Server},
                     {send_ch, Name, Channel, " *** joined the channel ***"}),
@@ -237,7 +267,7 @@ handle_cast({leave, Name, Channel}, S=#state{name=Server,
     NewUsers = lists:delete(Name, CurrentUsers),
     Forward = lists:delete([Server], Map),
     lists:map(fun([Serv]) ->
-                new_leave({Name, Channel}, Serv) end, Forward),
+                new(new_leave, {Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
 
@@ -247,6 +277,15 @@ handle_cast({send_ch, From, Ch, Msg}, S=#state{name=Server,
     lists:map(fun(U) -> 
                 send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
     {noreply, S};
+
+handle_cast({quit, Pid}, S=#state{name=Server}) ->
+    case ets:match(Server, {'$1', Pid, '_'}) of
+        [[Nick]] -> 
+            ets:delete(Server, Nick);
+        true -> ok
+    end,
+    {noreply, S};
+ 
 
 handle_cast({msg, To, Message}, S=#state{name=Server}) ->
     [[Pid, Host]] = ets:match(Server, {To, '$1', '$2'}),
@@ -258,6 +297,13 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
     end,
     {noreply, S}.
     
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Elects new leader and updates network map in case one of the servers
+%% goes down or is shut down.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=STbl,
                                                              leader=Leader}) ->
     ets:delete(STbl, Name),
@@ -269,13 +315,16 @@ handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=STbl,
     end,
     {noreply, S#state{leader=NewLeader}};
 
-
-handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{name=Server}) ->
-    case ets:match(Server, {'$1', Pid, '_'}) of
-        [[Nick]] -> 
-            ets:delete(Server, Nick);
-        true -> ok
-    end,
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Informs all servers that the user has disconnected.
+%% @end
+%% --------------------------------------------------------------------- 
+handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{map=STbl}) ->
+    Map = create_map(STbl),
+    lists:map(fun([Serv]) -> 
+                gen_server:cast({global, Serv}, {quit, Pid}) end, Map),
     {noreply, S};
 
 handle_info(_Msg, S) ->
@@ -288,28 +337,29 @@ code_change(_OldVsn, S, _Extra) ->
     {ok, S}.
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%% HELPER FUNCTIONS %%%
-%%%%%%%%%%%%%%%%%%%%%%%%
-
-new_server(New, Node, Target) ->
-    gen_server:call({global, Target}, {new_server, New, Node}).
-
-new_user(New, [Target]) ->
-    gen_server:call({global, Target}, {new_user, New}).
-
-new_channel(New, Target) ->
-    gen_server:call({global, Target}, {new_channel, New}).
-
-new_join(New, Target) ->
-    gen_server:call({global, Target}, {new_join, New}).
-
-new_leave(New, Target) ->
-    gen_server:call({global, Target}, {new_leave, New}).
+%% ===================================================================== 
+%% Internal functions
+%% ===================================================================== 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Sends a message about new user/server/channel/join... to a specified
+%% server.
+%% @end
+%% --------------------------------------------------------------------- 
+new(Atom, Message, Target) ->
+    gen_server:call({global, Target}, {Atom, Message}).
 
 send_msg(Server, User, Message) ->
     gen_server:cast({global, Server}, {msg, User, Message}).
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Takes server name, adds the specified suffix to it and creates an
+%% ETS table with that name.
+%% @end
+%% --------------------------------------------------------------------- 
 create_table(Server, Suffix) ->
     NewTable = list_to_atom(atom_to_list(Server) ++ Suffix),
     ets:new(NewTable, [set, named_table]),
