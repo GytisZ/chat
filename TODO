@@ -1,15 +1,14 @@
 1. users can delete channels
-2. when a server goes down, users should be deleted from the lists
-3. when a server connects to the cluster it should inherit users and channels.
-4. server name clashes
-5. add a function to create ChannelsTable in chat_server
-6. give leader chanserv and nickserv powers
-7. add clean shutdowns to tests
-8. all list_users etc. functions should be uniform
-9. implement channel not found
-10. figure out how to avoid using timer:sleep in tests
-11. stop sending printmsg through handle_info
-12. implement max_users
-13. implement load balancing
-14. remove macros
-15. use nick/name consistently throughout the project
+2. when a server connects to the cluster it should inherit users and channels.
+3. server name clashes
+4. add a function to create ChannelsTable in chat_server
+5. give leader chanserv and nickserv powers
+6. add clean shutdowns to tests
+7. all list_users etc. functions should be uniform
+8. implement channel not found
+9. figure out how to avoid using timer:sleep in tests
+10. stop sending printmsg through handle_info
+11. implement max_users
+12. implement load balancing
+13. remove macros
+14. use nick/name consistently throughout the project

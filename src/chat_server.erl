@@ -195,7 +195,7 @@ handle_cast({connect, New, Node, MaxUsers}, S=#state{name=Server,
     case Leader == Server  of
         true -> 
             lists:map(fun([T]) -> 
-                       new(server, {New, Node, MaxUsers}, T) end, Recipients), 
+                        new(server, {New, Node, MaxUsers}, T) end, Recipients), 
             gen_server:cast({global, New}, {init, ets:tab2list(STbl), Leader}),
             erlang:monitor(process, {New, Node}),
             {noreply, S};
@@ -208,7 +208,7 @@ handle_cast({init, NewMap, Leader}, S=#state{map=STbl}) ->
     ets:insert(STbl, NewMap),
     Map = ets:match(STbl, {'$1', '$2', '_'}),
     lists:map(fun([Serv, Node]) -> 
-                    erlang:monitor(process, {Serv, Node}) end, Map),
+                erlang:monitor(process, {Serv, Node}) end, Map),
     {noreply, S#state{leader=Leader}};
 
 handle_cast(stop, S) ->
@@ -282,10 +282,10 @@ handle_cast({quit, Pid}, S=#state{name=Server}) ->
     case ets:match(Server, {'$1', Pid, '_'}) of
         [[Nick]] -> 
             ets:delete(Server, Nick);
-        true -> ok
+        _ -> ok
     end,
     {noreply, S};
- 
+
 
 handle_cast({msg, To, Message}, S=#state{name=Server}) ->
     [[Pid, Host]] = ets:match(Server, {To, '$1', '$2'}),
@@ -293,10 +293,10 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
         Server ->
             Pid ! {msg, Message};
         Other ->
-           send_msg(Other, To, Message)
+            send_msg(Other, To, Message)
     end,
     {noreply, S}.
-    
+
 %% --------------------------------------------------------------------- 
 %% @private
 %% @doc
@@ -304,10 +304,16 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
 %% goes down or is shut down.
 %% @end
 %% --------------------------------------------------------------------- 
-handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=STbl,
-                                                             leader=Leader}) ->
+handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{name=Server,
+                                                            map=STbl,
+                                                            leader=Leader}) ->
     ets:delete(STbl, Name),
+    AffectedUsers = ets:match(Server, {'_', '$1', Name}),
     Map = create_map(STbl),
+    lists:map(fun([Pid]) -> 
+        lists:map(fun([Serv]) ->
+            gen_server:cast({global, Serv}, {quit, Pid}) end, Map) end, 
+        AffectedUsers),
     case Name == Leader of
         true -> SortedMap = lists:sort(Map),
             [[NewLeader] | _ ] = SortedMap;
@@ -364,7 +370,7 @@ create_table(Server, Suffix) ->
     NewTable = list_to_atom(atom_to_list(Server) ++ Suffix),
     ets:new(NewTable, [set, named_table]),
     NewTable.
- 
+
 create_map(TableName) ->
     ets:match(TableName, {'$1', '_', '_'}).
 

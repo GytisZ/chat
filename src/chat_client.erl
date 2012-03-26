@@ -189,7 +189,7 @@ handle_info({msg, {ch, Name, Ch, Message}}, S) ->
 
 handle_info({'DOWN', _, process, {Server, _}, _}, S=#state{server=Server}) ->
     io:format("The server ~p has gone offline.~n", [Server]),
-    io:format("Please connect to a server to continue chatting."),
+    io:format("Please connect to a server to continue chatting.~n"),
     {noreply, S#state{server=null, name=null}};
 
 handle_info(_Info, S) ->
