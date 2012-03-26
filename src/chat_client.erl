@@ -128,8 +128,7 @@ handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
     end;
 
 handle_call({sendmsg, To, Msg}, _From, S=#state{server=Server,
-                                                pid=Pid,
-                                                name=Name}) ->
+                                                pid=Pid}) ->
     gen_server:call({global, Server}, {sendmsg, Pid, To, Msg}),
     {reply, ok, S};
 

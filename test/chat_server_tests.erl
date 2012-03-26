@@ -56,7 +56,7 @@ server_connect(_) ->
     chat_server:connect(foo, bar),
     Channels = chat_server:network(bar),
     chat_server:shutdown(bar),
-    [?_assertEqual({bar, bar, [foo, bar]}, Channels)].
+    [?_assertEqual({bar, bar, [[foo], [bar]]}, Channels)].
 
 multiple_servers(_) ->
     {ok, Pid} = chat_server:start_link(man),
@@ -75,10 +75,10 @@ multiple_servers(_) ->
     Snapshot4 = chat_server:network(man),
     chat_server:shutdown(man),
     receive({'DOWN', MRef, _, _, _}) -> ok end,
-    [?_assertEqual({foo, chu, [foo, man, chu]}, Snapshot1),
-     ?_assertEqual({chu, chu, [foo, man, chu]}, Snapshot2),
-     ?_assertEqual({man, chu, [foo, man, chu]}, Snapshot3),
-     ?_assertEqual({man, foo, [foo, man]}, Snapshot4)].
+    [?_assertEqual({foo, chu, [[foo], [man], [chu]]}, Snapshot1),
+     ?_assertEqual({chu, chu, [[foo], [man], [chu]]}, Snapshot2),
+     ?_assertEqual({man, chu, [[foo], [man], [chu]]}, Snapshot3),
+     ?_assertEqual({man, foo, [[foo], [man]]}, Snapshot4)].
 
 user_table_updates(_) ->
     chat_server:start_link(man),

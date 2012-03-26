@@ -3,5 +3,16 @@
 3. when server connects to the cluster it should inherit users and channels.
 4. join private and channel messagign functions
 5. server name clashes
-6. remove macros
-7. use nick/name consistently throughout the project
+6. add a function to create ChannelsTable in chat_server
+7. give leader chanserv and nickserv powers
+8. add clean shutdowns to tests
+9. create a general function instead of new_ helper functions in chat_serv
+10. all list_users etc. functions should be uniform
+11. implement channel not found
+12. figure out how to avoid using timer:sleep in tests
+13. route private messages through servers
+14. stop sending printmsg through handle_info
+15. implement max_users
+16. implement load balancing
+17. remove macros
+18. use nick/name consistently throughout the project

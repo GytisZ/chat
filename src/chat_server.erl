@@ -14,6 +14,7 @@
 -record(state, {name=chat_server,
                 max_users=50,
                 map,
+                node,
                 leader,
                 channels}).
 
@@ -40,7 +41,7 @@ list_channels(Server) ->
 
 %% Connect Server to the Target server and its' cluster
 connect(Server, Target) ->
-    gen_server:cast({global, Target}, {connect, Server}).
+    gen_server:cast({global, Server}, {connect, Target}).
 
 %% Show who is the current leader and what servers are online
 network(Server) ->
@@ -55,25 +56,31 @@ shutdown(Server) ->
 %%%%%%%%%%%%%%%%%
 
 init([{Server}]) ->
-    ChannelsTable = list_to_atom(atom_to_list(Server) ++ "_ch"),
+    ChannelsTable = create_table(Server, "_ch"),
+    ServersTable = create_table(Server, "_map"),
     ets:new(Server, [set, named_table]),
-    ets:new(ChannelsTable, [set, named_table]),
+    ets:insert(ServersTable, {Server, node(), 50}),
     {ok, #state{name=Server,
-                map=[Server],
+                map=ServersTable,
                 leader=Server,
+                node=erlang:node(),
                 channels=ChannelsTable}};
 
 init([{Server, MaxUsers}]) ->
-    ChannelsTable = list_to_atom(atom_to_list(Server) ++ "_ch"),
+    ChannelsTable = create_table(Server, "_ch"),
+    ServersTable = create_table(Server, "_map"),
     ets:new(Server, [set, named_table]),
-    ets:new(ChannelsTable, [set, named_table]),
+    ets:insert(ServersTable, {Server, node(), MaxUsers}),
     {ok, #state{name=Server,
-                map=[Server],
+                node=erlang:node(),
+                map=ServersTable,
                 leader=Server,
-                max_users=MaxUsers}}.
+                max_users=MaxUsers,
+                channels=ChannelsTable}}.
 
-handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server, map=Map}) ->
-    Forward = lists:delete(Server, Map),
+handle_call({sign_in, Nick, Pid}, _From,  S=#state{name=Server, map=STbl}) ->
+    Map = create_map(STbl),
+    Forward = lists:delete([Server], Map),
     case {ets:match(Server, {Nick, '$1', '_'}),
           ets:match(Server, {'$1', Pid, '_'})} of
         {[],[]} -> 
@@ -119,10 +126,10 @@ handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
 handle_call(stop, _From, S) ->
     {stop, normal, ok, S};
 
-handle_call({new_server, New}, _From, S=#state{map=Map}) ->
-    NewMap = lists:append([New], Map),
-    erlang:monitor(process, New),
-    {reply, ok, S#state{map=NewMap}};
+handle_call({new_server, New, Node}, _From, S=#state{map=STbl}) ->
+    ets:insert(STbl, {New, Node, 50}),
+    erlang:monitor(process, {New, Node}),
+    {reply, ok, S};
 
 handle_call({new_join, {Name, Channel}}, _From, S=#state{channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
@@ -136,12 +143,8 @@ handle_call({new_leave, {Name, Channel}}, _From, S=#state{channels=ChTbl}) ->
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {reply, ok, S};
 
-handle_call({init, NewMap, Leader}, _From, S=#state{}) ->
-    lists:map(fun(Serv) -> erlang:monitor(process, Serv) end, NewMap),
-    {reply, ok, S#state{map=NewMap, leader=Leader}};
-
-handle_call(network, _From, S=#state{name=Server, map=Map, leader=Leader}) ->
-    {reply, {Server, Leader, Map}, S};
+handle_call(network, _From, S=#state{name=Server, map=STbl, leader=Leader}) ->
+    {reply, {Server, Leader, create_map(STbl)}, S};
 
 handle_call(_Request, _From, S) ->
     {reply, ok, S}.
@@ -150,23 +153,40 @@ handle_call(_Request, _From, S) ->
 %% every other server on the network. Forward the request to the leader
 %% if the server contacted wasn't the leader.
 
-handle_cast({connect, New}, S=#state{name=Server, leader=Leader, map=Map}) ->
-    NewMap = lists:append([New], Map),
-    Recipients = lists:delete(Server, Map),
+handle_cast({connect, Target}, S=#state{name=Server, node=Node}) ->
+    gen_server:cast({global, Target}, {connect, Server, Node}),
+    {noreply, S};
+
+handle_cast({connect, New, Node}, S=#state{name=Server, 
+                                           leader=Leader, 
+                                           map=STbl}) ->
+    Map = create_map(STbl),
+    ets:insert(STbl, {New, Node, 50}),
+    Recipients = lists:delete([Server], Map),
     case Leader == Server  of
-        true -> lists:map(fun(T) ->  new_server(New, T) end, Recipients), 
-            gen_server:call({global, New}, {init, NewMap, Leader}),
-            erlang:monitor(process, New),
-            {noreply, S#state{map=NewMap}};
+        true -> 
+            lists:map(fun([T]) -> new_server(New, Node,  T) end, Recipients), 
+            gen_server:cast({global, New}, {init, ets:tab2list(STbl), Leader}),
+            erlang:monitor(process, {New, Node}),
+            {noreply, S};
         false -> gen_server:cast({global, New}, {leader, Leader}),
             {noreply, S}
     end;
 
+handle_cast({init, NewMap, Leader}, S=#state{map=STbl}) ->
+    ets:delete_all_objects(STbl),
+    ets:insert(STbl, NewMap),
+    Map = ets:match(STbl, {'$1', '$2', '_'}),
+    lists:map(fun([Serv, Node]) -> 
+                    erlang:monitor(process, {Serv, Node}) end, Map),
+    {noreply, S#state{leader=Leader}};
+
 handle_cast(stop, S) ->
     {stop, normal, S};
 
-handle_cast({sign_out, Nick}, S=#state{map=Map}) ->
-    lists:map(fun(T) ->
+handle_cast({sign_out, Nick}, S=#state{map=STbl}) ->
+    Map = create_map(STbl), 
+    lists:map(fun([T]) ->
                 gen_server:cast({global, T}, {user_left, Nick}) end, Map),
     {noreply, S};
 
@@ -179,13 +199,14 @@ handle_cast({leader, Leader}, S=#state{name=Server}) ->
     {noreply, S};
 
 handle_cast({create, Channel}, S=#state{name=Server,
-                                        map=Map,
+                                        map=STbl,
                                         channels=ChTbl}) ->
-    Forward = lists:delete(Server, Map),
+    Map = create_map(STbl),
+    Forward = lists:delete([Server], Map),
     case ets:match(ChTbl, {Channel, '_'}) of
         [] -> 
             ets:insert(ChTbl, {Channel, []}),
-            lists:map(fun(Serv) ->
+            lists:map(fun([Serv]) ->
                         new_channel(Channel, Serv) end, Forward),
             {noreply, S};
         [_] ->
@@ -193,12 +214,13 @@ handle_cast({create, Channel}, S=#state{name=Server,
     end;
 
 handle_cast({join, Name, Channel}, S=#state{name=Server, 
-                                            map=Map,
+                                            map=STbl,
                                             channels=ChTbl}) ->
+    Map = create_map(STbl),
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:append(CurrentUsers, [Name]),
-    Forward = lists:delete(Server, Map),
-    lists:map(fun(Serv) ->
+    Forward = lists:delete([Server], Map),
+    lists:map(fun([Serv]) ->
                 new_join({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     gen_server:cast({global, Server},
@@ -206,20 +228,21 @@ handle_cast({join, Name, Channel}, S=#state{name=Server,
     {noreply, S};
 
 handle_cast({leave, Name, Channel}, S=#state{name=Server,
-                                             map=Map,
+                                             map=STbl,
                                              channels=ChTbl}) ->
     gen_server:cast({global, Server},
                     {send_ch, Name, Channel, "*** has left the channel ***"}),
+    Map = create_map(STbl),
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:delete(Name, CurrentUsers),
-    Forward = lists:delete(Server, Map),
-    lists:map(fun(Serv) ->
+    Forward = lists:delete([Server], Map),
+    lists:map(fun([Serv]) ->
                 new_leave({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
 
 handle_cast({send_ch, From, Ch, Msg}, S=#state{name=Server, 
-                                                      channels=ChTbl}) ->
+                                               channels=ChTbl}) ->
     ChannelUsers = ets:lookup_element(ChTbl, Ch, 2),
     lists:map(fun(U) -> 
                 send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
@@ -235,15 +258,16 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
     end,
     {noreply, S}.
     
-handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
+handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=STbl,
                                                              leader=Leader}) ->
-    NewMap = lists:delete(Name, Map),
+    ets:delete(STbl, Name),
+    Map = create_map(STbl),
     case Name == Leader of
-        true -> SortedMap = lists:sort(NewMap),
-            [NewLeader | _ ] = SortedMap;
+        true -> SortedMap = lists:sort(Map),
+            [[NewLeader] | _ ] = SortedMap;
         false -> NewLeader = Leader
     end,
-    {noreply, S#state{map=NewMap, leader=NewLeader}};
+    {noreply, S#state{leader=NewLeader}};
 
 
 handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{name=Server}) ->
@@ -268,10 +292,10 @@ code_change(_OldVsn, S, _Extra) ->
 %%% HELPER FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-new_server(New, Target) ->
-    gen_server:call({global, Target}, {new_server, New}).
+new_server(New, Node, Target) ->
+    gen_server:call({global, Target}, {new_server, New, Node}).
 
-new_user(New, Target) ->
+new_user(New, [Target]) ->
     gen_server:call({global, Target}, {new_user, New}).
 
 new_channel(New, Target) ->
@@ -285,3 +309,12 @@ new_leave(New, Target) ->
 
 send_msg(Server, User, Message) ->
     gen_server:cast({global, Server}, {msg, User, Message}).
+
+create_table(Server, Suffix) ->
+    NewTable = list_to_atom(atom_to_list(Server) ++ Suffix),
+    ets:new(NewTable, [set, named_table]),
+    NewTable.
+ 
+create_map(TableName) ->
+    ets:match(TableName, {'$1', '_', '_'}).
+
