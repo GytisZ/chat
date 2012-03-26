@@ -105,13 +105,6 @@ handle_call(list_ch, _From, S=#state{channels=Ch}) ->
 handle_call({list_ch_users, Channel}, _From, S=#state{channels=ChTbl}) ->
     {reply, ets:match(ChTbl, {Channel, '$1'}), S};
 
-handle_call({send_ch, From, Ch, Msg}, _From, S=#state{name=Server, 
-                                                      channels=ChTbl}) ->
-    ChannelUsers = ets:lookup_element(ChTbl, Ch, 2),
-    lists:map(fun(U) -> 
-                send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
-    {reply, ok, S};
-
 handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
     case ets:match(Server, {To, '$1', '$2'})  of
@@ -213,12 +206,21 @@ handle_cast({join, Name, Channel}, S=#state{name=Server,
 handle_cast({leave, Name, Channel}, S=#state{name=Server,
                                              map=Map,
                                              channels=ChTbl}) ->
+    gen_server:cast({global, Server},
+                    {send_ch, Name, Channel, "*** has left the channel ***"}),
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:delete(Name, CurrentUsers),
     Forward = lists:delete(Server, Map),
     lists:map(fun(Serv) ->
                 new_leave({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    {noreply, S};
+
+handle_cast({send_ch, From, Ch, Msg}, S=#state{name=Server, 
+                                                      channels=ChTbl}) ->
+    ChannelUsers = ets:lookup_element(ChTbl, Ch, 2),
+    lists:map(fun(U) -> 
+                send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
     {noreply, S};
 
 handle_cast({msg, To, Message}, S=#state{name=Server}) ->

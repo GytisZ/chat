@@ -154,7 +154,7 @@ handle_call({list_ch_users, Channel}, _From, S=#state{server=Server}) ->
 
 handle_call({send_ch, Channel, Message}, _From, S=#state{server=Server,
                                                          name=Name}) ->
-    gen_server:call({global, Server}, {send_ch, Name, Channel, Message}),
+    gen_server:cast({global, Server}, {send_ch, Name, Channel, Message}),
     {reply, ok, S};
 
 handle_call(stop, _From, S) ->
