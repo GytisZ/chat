@@ -76,10 +76,11 @@ name_taken(_) ->
     chat_client:start(gytis),
     chat_client:sign_in(foobar, gytis, "Gytis"),
     chat_client:start(imposter),
-    Response = chat_client:sign_in(foobar, imposter, "Gytis"),
+    chat_client:sign_in(foobar, imposter, "Gytis"),
+    List = chat_server:list_names(foobar),
     chat_client:shutdown(gytis),
     chat_client:shutdown(imposter),
-    [?_assertEqual(name_taken, Response)].
+    [?_assertEqual([["Gytis"]], List)].
 
 mult_user(_) ->
     chat_client:start(nifnif),
@@ -105,8 +106,9 @@ mult_user(_) ->
 sign_in_twice(_) ->
     chat_client:start(newton),
     chat_client:sign_in(foobar, newton, "Isaac"),
-    [?_assertEqual(already_signed_in, 
-                   chat_client:sign_in(foobar, newton, "Hotpants"))].
+    chat_client:sign_in(foobar, newton, "Hotpants"),
+    List = chat_server:list_names(foobar),
+    [?_assertEqual([["Isaac"]], List)].
 
 send_msg(_) ->
     chat_client:start(r2d2),

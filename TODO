@@ -1,6 +1,6 @@
 1. users can delete channels
 2. server name clashes
-3. give leader chanserv and nickserv powers
+3. give leader chanserv powers
 4. add clean shutdowns to tests
 5. all list_users etc. functions should be uniform
 6. implement channel not found

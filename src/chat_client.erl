@@ -115,17 +115,9 @@ init([]) ->
 
 
 handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
-    case gen_server:call({global, Server}, {sign_in, Name, Pid}) of
-        ok -> 
-            erlang:monitor(process, Server),
-            {reply, ok, S#state{server=Server, name=Name}};
-        name_taken -> 
-            io:format("~p is taken. Select a different nick.~n", [Name]),
-            {reply, name_taken, S};
-        already_signed_in ->
-            io:format("You are already signed in.~n", []),
-            {reply, already_signed_in, S}
-    end;
+    gen_server:cast({global, Server}, {nickserv, Name, Pid}),
+    erlang:monitor(process, Server),
+    {reply, ok, S#state{server=Server, name=Name}};
 
 handle_call({sendmsg, To, Msg}, _From, S=#state{server=Server,
                                                 pid=Pid}) ->
@@ -178,6 +170,14 @@ handle_cast({not_found, To}, S) ->
 
 handle_cast(_Message, S) ->
     {noreply, S}.
+
+handle_info({msg, {name_taken, Name}}, S) ->
+     io:format("~p is taken. Select a different nick.~n", [Name]),
+     {noreply, S};
+
+handle_info({msg, already_signed_in}, S) ->
+     io:format("You are already signed in.~n", []),
+     {noreply, S};
 
 handle_info({msg, {priv, From, Message}}, S) ->
     io:format("~p >>> ~p~n", [From, Message]),
