@@ -1,8 +1,7 @@
-1. users get a message when someone join a channel that they're on
-2. users can delete channels
-3. when server goes down, users should be deleted from the lists
-4. when server connects to the cluster it should inherit users and channels.
-5. join private and channel messagign functions
-6. server name clashes
-7. remove macros
-8. use nick/name consistently throughout the project
+1. users can delete channels
+2. when server goes down, users should be deleted from the lists
+3. when server connects to the cluster it should inherit users and channels.
+4. join private and channel messagign functions
+5. server name clashes
+6. remove macros
+7. use nick/name consistently throughout the project

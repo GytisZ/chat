@@ -201,6 +201,8 @@ handle_cast({join, Name, Channel}, S=#state{name=Server,
     lists:map(fun(Serv) ->
                 new_join({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    gen_server:cast({global, Server},
+                    {send_ch, Name, Channel, " *** joined the channel ***"}),
     {noreply, S};
 
 handle_cast({leave, Name, Channel}, S=#state{name=Server,
