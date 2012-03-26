@@ -1,10 +1,9 @@
 1. users can delete channels
 2. server name clashes
-3. give leader chanserv powers
-4. add clean shutdowns to tests
-5. all list_users etc. functions should be uniform
-6. implement channel not found
-7. stop sending printmsg through handle_info
-8. implement load balancing
-9. remove macros
-10. use nick/name consistently throughout the project
+3. add clean shutdowns to tests
+4. all list_users etc. functions should be uniform
+5. implement channel not found
+6. stop sending printmsg through handle_info
+7. implement load balancing
+8. remove macros
+9. use nick/name consistently throughout the project

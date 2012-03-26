@@ -232,6 +232,10 @@ handle_cast({leader, Leader}, S=#state{name=Server}) ->
     connect(Server, Leader),
     {noreply, S};
 
+handle_cast({chanserv, Channel}, S=#state{leader=Leader}) ->
+    gen_server:cast({global, Leader}, {create, Channel}),
+    {noreply, S};
+
 handle_cast({create, Channel}, S=#state{name=Server,
                                         map=STbl,
                                         channels=ChTbl}) ->

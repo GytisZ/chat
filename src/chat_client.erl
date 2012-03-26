@@ -23,7 +23,6 @@
 %% as a local name.
 %% @end
 %% ---------------------------------------------------------------------  
--spec start(atom()) -> ok.
 start(RefName) ->
     {ok, Pid} = gen_server:start({local, RefName}, ?MODULE, [], []),
     set_pid(RefName, Pid).
@@ -34,7 +33,6 @@ start(RefName) ->
 %% @end
 %% TODO: change the name into something more appropriate
 %% --------------------------------------------------------------------- 
--spec sign_in(atom(), atom(), string()) -> ok.
 sign_in(ServerName, RefName, Nick) ->
     gen_server:call(RefName, {sign_in, ServerName, Nick}).
 
@@ -62,7 +60,6 @@ list_channels(RefName) ->
 %% Create a new channel
 %% @end
 %% --------------------------------------------------------------------- 
--spec create(atom(), atom()) -> ok.
 create(RefName, Channel) ->
     gen_server:call(RefName, {create, Channel}).
 
@@ -71,7 +68,6 @@ create(RefName, Channel) ->
 %% Join a channel
 %% @end
 %% --------------------------------------------------------------------- 
--spec join(atom(), atom()) -> ok.
 join(RefName, Channel) ->
     gen_server:call(RefName, {join, Channel}).
 
@@ -80,7 +76,6 @@ join(RefName, Channel) ->
 %% List users on a particular channel
 %% @end
 %% --------------------------------------------------------------------- 
--spec list_ch_users(atom(), atom()) -> list(list(string())).
 list_ch_users(RefName, Channel) ->
     gen_server:call(RefName, {list_ch_users, Channel}).
 
@@ -131,7 +126,7 @@ handle_call(list_channels, _From, S=#state{server=Server}) ->
     {reply, chat_server:list_channels(Server), S};
 
 handle_call({create, Channel}, _From, S=#state{server=Server}) ->
-    gen_server:cast({global, Server}, {create, Channel}),
+    gen_server:cast({global, Server}, {chanserv, Channel}),
     {reply, ok, S};
 
 handle_call({join, Channel}, _From, S=#state{server=Server, name=Name}) ->
