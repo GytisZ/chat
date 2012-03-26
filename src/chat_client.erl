@@ -182,6 +182,11 @@ handle_info({msg, {ch, Name, Ch, Message}}, S) ->
     io:format("#~p[~p]: ~p~n", [Ch, Name, Message]),
     {noreply, S};
 
+handle_info({msg, {server_full, Suggestion}}, S) ->
+    io:format("The server that you've tried to connect to was full.~n"),
+    io:format("We suggest trying | ~p | instead.~n", [Suggestion]),
+    {noreply, S};
+
 handle_info({'DOWN', _, process, {Server, _}, _}, S=#state{server=Server}) ->
     io:format("The server ~p has gone offline.~n", [Server]),
     io:format("Please connect to a server to continue chatting.~n"),

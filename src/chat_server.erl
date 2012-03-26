@@ -2,11 +2,11 @@
 
 -behaviour(gen_server).
 
-%% sort of public
--export([start_link/1, start_link/2, connect/2, network/1,
+%% public
+-export([start/1, start_link/1, start_link/2, connect/2, network/1,
          list_names/1, list_channels/1, shutdown/1]).
 
-%% not so public
+%% private
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
@@ -27,14 +27,15 @@
 %% Start server, optional second argument sets user limit
 %% @end
 %% --------------------------------------------------------------------- 
+start(Server) ->
+    gen_server:start({global, Server}, ?MODULE, [{Server}], []).
+
 start_link(Server) ->
-    {ok, Pid}=gen_server:start_link({global, Server}, ?MODULE, [{Server}], []),
-    register(Server, Pid),
-    {ok, Pid}.
+    gen_server:start_link({global, Server}, ?MODULE, [{Server}], []).
 
 start_link(Server, MaxUsers) ->
     gen_server:start_link({global, Server}, ?MODULE, 
-                          [Server, MaxUsers], []).
+                          [{Server, MaxUsers}], []).
 
 %% --------------------------------------------------------------------- 
 %% @doc
@@ -130,17 +131,30 @@ handle_call(network, _From, S=#state{name=Server, map=STbl, leader=Leader}) ->
 handle_call(_Request, _From, S) ->
     {reply, ok, S}.
 
-handle_cast({nickserv, Nick, Pid}, S=#state{leader=Leader}) ->
-    gen_server:cast({global, Leader}, {sign_in, Nick, Pid}),
+handle_cast({nickserv, Nick, Pid}, S=#state{name=Server,
+                                           leader=Leader,
+                                           map=STbl}) ->
+    OpenSpots = ets:lookup_element(STbl, Server, 3),
+    case OpenSpots > 1 of 
+        true ->
+            ets:update_element(STbl, Server, {3, OpenSpots - 1}),
+            NewUser = {Nick, Pid, Server},
+            gen_server:cast({global, Leader}, {sign_in, NewUser});
+        false ->
+            Possibilities = ets:match(STbl, {'$2', '_', '$1'}),
+            Sorted = list:reverse(list:sort(Possibilities)),
+            [[Suggestion, _] | _ ] = Sorted,
+            Pid ! {msg, {server_full, Suggestion}}
+    end,
     {noreply, S};
 
-handle_cast({sign_in, Nick, Pid}, S=#state{name=Server, map=STbl}) ->
+handle_cast({sign_in, {Nick, Pid, Server}}, S=#state{name=Leader, map=STbl}) ->
     Map = create_map(STbl),
-    Forward = lists:delete([Server], Map),
-    case {ets:match(Server, {Nick, '$1', '_'}),
-          ets:match(Server, {'$1', Pid, '_'})} of
+    Forward = lists:delete([Leader], Map),
+    case {ets:match(Leader, {Nick, '$1', '_'}),
+          ets:match(Leader, {'$1', Pid, '_'})} of
         {[],[]} -> 
-            ets:insert(Server, {Nick, Pid, Server}),
+            ets:insert(Leader, {Nick, Pid, Server}),
             lists:map(fun([Serv]) ->
                         new(user, {Nick, Pid, Server}, Serv) end, Forward),
             erlang:monitor(process, Pid),
