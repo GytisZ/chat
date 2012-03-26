@@ -44,7 +44,13 @@ join_channel_test_() ->
     {"client can join a channel.",
      ?setup(fun join_channel/1)}.
 
-%%% SETUP FUNCTIONS
+send_channel_test_() ->
+    {"client can send messages to a channel.",
+     ?setup(fun send_channel/1)}.
+
+%% ===================================================================== 
+%% Setup functions
+%% =====================================================================  
 
 start() ->
     {ok, Pid} = chat_server:start_link(foobar),
@@ -143,6 +149,15 @@ join_channel(_) ->
     Users = chat_client:list_ch_users(foo, erlang),
     chat_client:shutdown(foo),
     [?_assertEqual([[["Bar"]]], Users)].
+
+send_channel(_) ->
+    chat_client:start(foo),
+    chat_client:name(foobar, foo, "Bar"),
+    chat_client:create(foo, kanalas),
+    chat_client:join(foo, kanalas),
+    chat_client:send_channel(foo, kanalas, "Hello world"),
+    chat_client:shutdown(foo),
+    [?_assertEqual(1, 1)].
     
 %%%%%%%%%%%%%%%%%%%%%%%%
 %%% HELPER FUNCTIONS %%%

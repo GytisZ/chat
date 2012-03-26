@@ -105,6 +105,13 @@ handle_call(list_ch, _From, S=#state{channels=Ch}) ->
 handle_call({list_ch_users, Channel}, _From, S=#state{channels=ChTbl}) ->
     {reply, ets:match(ChTbl, {Channel, '$1'}), S};
 
+handle_call({send_ch, From, Ch, Msg}, _From, S=#state{name=Server, 
+                                                      channels=ChTbl}) ->
+    ChannelUsers = ets:lookup_element(ChTbl, Ch, 2),
+    lists:map(fun(U) -> 
+                send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
+    {reply, ok, S};
+
 handle_call({sendmsg, From, To, Message}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
     case ets:match(Server, {To, '$1', '$2'})  of
@@ -127,6 +134,12 @@ handle_call({new_server, New}, _From, S=#state{map=Map}) ->
 handle_call({new_join, {Name, Channel}}, _From, S=#state{channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:append(CurrentUsers, [Name]),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    {reply, ok, S};
+
+handle_call({new_leave, {Name, Channel}}, _From, S=#state{channels=ChTbl}) ->
+    CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
+    NewUsers = lists:delete(Name, CurrentUsers),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {reply, ok, S};
 
@@ -195,8 +208,29 @@ handle_cast({join, Name, Channel}, S=#state{name=Server,
     lists:map(fun(Serv) ->
                 new_join({Name, Channel}, Serv) end, Forward),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
-    {noreply, S}.
+    {noreply, S};
 
+handle_cast({leave, Name, Channel}, S=#state{name=Server,
+                                             map=Map,
+                                             channels=ChTbl}) ->
+    CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
+    NewUsers = lists:delete(Name, CurrentUsers),
+    Forward = lists:delete(Server, Map),
+    lists:map(fun(Serv) ->
+                new_leave({Name, Channel}, Serv) end, Forward),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    {noreply, S};
+
+handle_cast({msg, To, Message}, S=#state{name=Server}) ->
+    [[Pid, Host]] = ets:match(Server, {To, '$1', '$2'}),
+    case Host of 
+        Server ->
+            Pid ! {msg, Message};
+        Other ->
+           send_msg(Other, To, Message)
+    end,
+    {noreply, S}.
+    
 handle_info({'DOWN', _, process, {Name, _Node}, _}, S=#state{map=Map,
                                                              leader=Leader}) ->
     NewMap = lists:delete(Name, Map),
@@ -241,3 +275,9 @@ new_channel(New, Target) ->
 
 new_join(New, Target) ->
     gen_server:call({global, Target}, {new_join, New}).
+
+new_leave(New, Target) ->
+    gen_server:call({global, Target}, {new_leave, New}).
+
+send_msg(Server, User, Message) ->
+    gen_server:cast({global, Server}, {msg, User, Message}).

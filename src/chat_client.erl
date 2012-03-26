@@ -3,7 +3,8 @@
 
 %% API
 -export([start/1, name/3, send/3, list_names/1, create/2, list_channels/1,
-         sign_out/1, shutdown/1, join/2, list_ch_users/2]).
+         sign_out/1, shutdown/1, join/2, list_ch_users/2, leave/2,
+         send_channel/3]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -39,7 +40,7 @@ name(ServerName, RefName, Nick) ->
 
 %% --------------------------------------------------------------------- 
 %% @doc 
-%% Sends a message to another user.
+%% Send a message to another user.
 %% @end
 %% --------------------------------------------------------------------- 
 send(RefName, To, Message) ->
@@ -50,7 +51,7 @@ list_names(RefName) ->
 
 %% --------------------------------------------------------------------- 
 %% @doc
-%% Lists the available channels
+%% List the available channels
 %% @end
 %% --------------------------------------------------------------------- 
 list_channels(RefName) ->
@@ -58,7 +59,7 @@ list_channels(RefName) ->
 
 %% --------------------------------------------------------------------- 
 %% @doc
-%% Creates a new channel
+%% Create a new channel
 %% @end
 %% --------------------------------------------------------------------- 
 -spec create(atom(), atom()) -> ok.
@@ -67,7 +68,7 @@ create(RefName, Channel) ->
 
 %% --------------------------------------------------------------------- 
 %% @doc
-%% Joins a channel
+%% Join a channel
 %% @end
 %% --------------------------------------------------------------------- 
 -spec join(atom(), atom()) -> ok.
@@ -76,12 +77,28 @@ join(RefName, Channel) ->
 
 %% --------------------------------------------------------------------- 
 %% @doc
-%% List users in a particular channel
+%% List users on a particular channel
 %% @end
 %% --------------------------------------------------------------------- 
 -spec list_ch_users(atom(), atom()) -> list(list(string())).
 list_ch_users(RefName, Channel) ->
     gen_server:call(RefName, {list_ch_users, Channel}).
+
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Leave a channel
+%% @end
+%% --------------------------------------------------------------------- 
+leave(RefName, Channel) ->
+    gen_server:call(RefName, {leave, Channel}).
+
+%% --------------------------------------------------------------------- 
+%% @doc
+%% Send a message to the channel
+%% @end
+%% --------------------------------------------------------------------- 
+send_channel(RefName, Channel, Message) ->
+    gen_server:call(RefName, {send_ch, Channel, Message}).
 
 sign_out(RefName) ->
     gen_server:cast(RefName, sign_out).
@@ -128,8 +145,17 @@ handle_call({join, Channel}, _From, S=#state{server=Server, name=Name}) ->
     gen_server:cast({global, Server}, {join, Name, Channel}),
     {reply, ok, S};
 
+handle_call({leave, Channel}, _From, S=#state{server=Server, name=Name}) ->
+    gen_server:cast({global, Server}, {leave, Name, Channel}),
+    {reply, ok, S};
+
 handle_call({list_ch_users, Channel}, _From, S=#state{server=Server}) ->
     {reply, gen_server:call({global, Server}, {list_ch_users, Channel}), S};
+
+handle_call({send_ch, Channel, Message}, _From, S=#state{server=Server,
+                                                         name=Name}) ->
+    gen_server:call({global, Server}, {send_ch, Name, Channel, Message}),
+    {reply, ok, S};
 
 handle_call(stop, _From, S) ->
     {stop, normal, ok, S};
@@ -155,6 +181,10 @@ handle_cast(_Message, S) ->
 
 handle_info({printmsg, From, Message}, S) ->
     io:format("~p says: ~p~n", [From, Message]),
+    {noreply, S};
+
+handle_info({msg, {ch, Name, Ch, Message}}, S) ->
+    io:format("#~p[~p]: ~p~n", [Ch, Name, Message]),
     {noreply, S};
 
 handle_info({'DOWN', _, process, {Server, _}, _}, S=#state{server=Server}) ->
