@@ -181,31 +181,43 @@ handle_call(_Request, _From, S) ->
 %% @end
 %% --------------------------------------------------------------------- 
 handle_cast({connect, Target}, S=#state{name=Server,
-                                        node=Node,
-                                        max_users=MaxUsers}) ->
+                                       node=Node,
+                                       max_users=MaxUsers}) ->
     gen_server:cast({global, Target}, {connect, Server, Node, MaxUsers}),
     {noreply, S};
 
 handle_cast({connect, New, Node, MaxUsers}, S=#state{name=Server, 
-                                                     leader=Leader, 
-                                                     map=STbl}) ->
+                                                    leader=Leader, 
+                                                    map=STbl,
+                                                    channels=ChTbl}) ->
     Map = create_map(STbl),
     ets:insert(STbl, {New, Node, MaxUsers}),
     Recipients = lists:delete([Server], Map),
     case Leader == Server  of
         true -> 
             lists:map(fun([T]) -> 
-                        new(server, {New, Node, MaxUsers}, T) end, Recipients), 
-            gen_server:cast({global, New}, {init, ets:tab2list(STbl), Leader}),
+                       new(server, {New, Node, MaxUsers}, T) end, Recipients), 
+            PassMap = ets:tab2list(STbl),
+            PassChannels = ets:tab2list(ChTbl),
+            PassUsers = ets:tab2list(Server),
+            Pass = {PassUsers, PassMap, PassChannels},
+            gen_server:cast({global, New}, {init, Pass, Leader}),
             erlang:monitor(process, {New, Node}),
             {noreply, S};
         false -> gen_server:cast({global, New}, {leader, Leader}),
             {noreply, S}
     end;
 
-handle_cast({init, NewMap, Leader}, S=#state{map=STbl}) ->
+handle_cast({init, New, Leader}, S=#state{name=Server,
+                                         map=STbl,
+                                         channels=ChTbl}) ->
+    {NewUsers, NewMap, NewChannels} = New,
     ets:delete_all_objects(STbl),
     ets:insert(STbl, NewMap),
+    ets:delete_all_objects(Server),
+    ets:insert(Server, NewUsers),
+    ets:delete_all_objects(ChTbl),
+    ets:insert(ChTbl, NewChannels),
     Map = ets:match(STbl, {'$1', '$2', '_'}),
     lists:map(fun([Serv, Node]) -> 
                 erlang:monitor(process, {Serv, Node}) end, Map),
