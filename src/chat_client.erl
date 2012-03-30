@@ -33,9 +33,10 @@ start(RefName) ->
 
 %% ---------------------------------------------------------------------     
 %% @doc
-%% Signs the user in.
+%% Signs the user in. ServerName is only used to establish a connection
+%% with the server, user might end up being assigned to a different 
+%% server.
 %% @end
-%% TODO: change the name into something more appropriate
 %% --------------------------------------------------------------------- 
 sign_in(ServerName, Nick) ->
     gen_server:call(?MODULE, {sign_in, ServerName, Nick}).
