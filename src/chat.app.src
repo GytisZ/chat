@@ -1,12 +1,12 @@
 {application, chat,
  [
-  {description, ""},
+  {description, "Simplistic version of a an irc inspired chat service."},
   {vsn, "1"},
+  {modules, [chat_server, chat_client, chat_server_sup, chat_client_sup]},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib
                  ]},
-  {mod, { chat_app, []}},
   {env, []}
  ]}.

@@ -36,13 +36,16 @@ network_channel_test_() ->
 %%%%%%%%%%%%%%%%%%%%%%%
 
 start() ->
-    {ok, Pid} = chat_server:start_link(foo),
+    {ok, Pid} = chat_server_sup:start_link(),
+    chat_server_sup:start(foo),
     Pid.
 
 stop(Pid) ->
     MRef = erlang:monitor(process, Pid),
-    chat_server:shutdown(foo),
-    receive {'DOWN', MRef, _, _, _} -> ok end.
+    chat_server_sup:stop(foo),
+    erlang:exit(Pid, normal),
+    receive {'DOWN', MRef, _, _, _} -> ok end,
+    timer:sleep(200).
 
 %%%%%%%%%%%%%%%%%%%%
 %%% ACTUAL TESTS %%%
@@ -52,17 +55,14 @@ is_registered(Pid) ->
     [?_assert(erlang:is_process_alive(Pid))].
 
 server_connect(_) ->
-    chat_server:start_link(bar),
+    chat_server_sup:start(bar),
     chat_server:connect(foo, bar),
     Channels = chat_server:network(bar),
-    chat_server:shutdown(bar),
     [?_assertEqual({bar, bar, [[foo], [bar]]}, Channels)].
 
 multiple_servers(_) ->
-    {ok, Pid} = chat_server:start_link(man),
-    {ok, Pid2} = chat_server:start_link(chu),
-    MRef = erlang:monitor(process, Pid),
-    MRef2 = erlang:monitor(process, Pid2),
+    chat_server_sup:start(man),
+    chat_server_sup:start(chu),
     chat_server:connect(man, chu),
     timer:sleep(50),
     chat_server:connect(foo, man),
@@ -70,11 +70,10 @@ multiple_servers(_) ->
     Snapshot1 = chat_server:network(foo),
     Snapshot2 = chat_server:network(chu),
     Snapshot3 = chat_server:network(man),
-    chat_server:shutdown(chu),
-    receive({'DOWN', MRef2, _, _, _}) -> ok end,
+    chat_server_sup:stop(chu),
+    timer:sleep(50),
     Snapshot4 = chat_server:network(man),
-    chat_server:shutdown(man),
-    receive({'DOWN', MRef, _, _, _}) -> ok end,
+    chat_server_sup:stop(man),
     [?_assertEqual({foo, chu, [[foo], [man], [chu]]}, Snapshot1),
      ?_assertEqual({chu, chu, [[foo], [man], [chu]]}, Snapshot2),
      ?_assertEqual({man, chu, [[foo], [man], [chu]]}, Snapshot3),
@@ -90,9 +89,9 @@ user_table_updates(_) ->
     chat_client:start(jonas),
     chat_client:start(petras),
     chat_client:start(karolis),
-    chat_client:sign_in(foo, jonas, "Jonas"),
-    chat_client:sign_in(chu, petras, "Petras"),
-    chat_client:sign_in(man, karolis, "Karolis"),
+    chat_client:sign_in(jonas, foo, "Jonas"),
+    chat_client:sign_in(petras, chu, "Petras"),
+    chat_client:sign_in(karolis, man, "Karolis"),
     List1 = chat_server:list_names(foo),
     List2 = chat_server:list_names(man),
     List3 = chat_server:list_names(chu),
@@ -107,12 +106,12 @@ channels_propagate(_) ->
     timer:sleep(50),
     chat_server:connect(baz, foo),
     chat_client:start(qux),
-    chat_client:sign_in(foo, qux, "Quux"),
+    chat_client:sign_in(qux, foo, "Quux"),
     chat_client:create(qux, erlang),
     chat_client:create(qux, irssi),
     timer:sleep(50),
     chat_client:start(kinzaza),
-    chat_client:sign_in(baz, kinzaza, "kinzaza"),
+    chat_client:sign_in(kinzaza, baz, "kinzaza"),
     Channels = chat_client:list_channels(kinzaza),
     chat_client:shutdown(kinzaza),
     chat_client:shutdown(qux),
@@ -125,9 +124,9 @@ network_channel(_) ->
     chat_server:connect(foo, bar),
     timer:sleep(50),
     chat_client:start(baz),
-    chat_client:sign_in(foo, baz, "baz"),
+    chat_client:sign_in(baz, foo, "baz"),
     chat_client:start(qux),
-    chat_client:sign_in(bar, qux, "qux"),
+    chat_client:sign_in(qux, bar, "qux"),
     chat_client:create(baz, baras),
     chat_client:create(baz, viktorina),
     chat_client:join(baz, baras),

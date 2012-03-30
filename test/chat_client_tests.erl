@@ -53,18 +53,20 @@ send_channel_test_() ->
 %% =====================================================================  
 
 start() ->
-    {ok, Pid} = chat_server:start_link(foobar),
+    {ok, Pid} = chat_server_sup:start_link(),
+    chat_server_sup:start(foobar),
     Pid.
 
 stop(Pid) ->
     MRef = erlang:monitor(process, Pid),
-    chat_server:shutdown(foobar),
+    erlang:exit(Pid, normal),
     receive {'DOWN', MRef, _, _, _} -> ok end.
+
 %%% ACTUAL TESTS
 
 sign_in_and_out(_) ->
     chat_client:start(baliulia),
-    chat_client:sign_in(foobar, baliulia, "baliulia"),
+    chat_client:sign_in(baliulia, foobar, "baliulia"),
     List1 = chat_client:list_names(baliulia),
     chat_client:sign_out(baliulia),
     timer:sleep(50),
@@ -74,9 +76,9 @@ sign_in_and_out(_) ->
 
 name_taken(_) ->
     chat_client:start(gytis),
-    chat_client:sign_in(foobar, gytis, "Gytis"),
+    chat_client:sign_in(gytis, foobar, "Gytis"),
     chat_client:start(imposter),
-    chat_client:sign_in(foobar, imposter, "Gytis"),
+    chat_client:sign_in(imposter, foobar, "Gytis"),
     List = chat_server:list_names(foobar),
     chat_client:shutdown(gytis),
     chat_client:shutdown(imposter),
@@ -86,10 +88,10 @@ mult_user(_) ->
     chat_client:start(nifnif),
     chat_client:start(nufnuf),
     chat_client:start(nafnaf),
-    chat_client:sign_in(foobar, nifnif, "nifnif"),
-    chat_client:sign_in(foobar, nafnaf, "nafnaf"),
+    chat_client:sign_in(nifnif, foobar, "nifnif"),
+    chat_client:sign_in(nafnaf, foobar, "nafnaf"),
     List1 = chat_client:list_names(nifnif),
-    chat_client:sign_in(foobar, nufnuf, "nufnuf"),
+    chat_client:sign_in(nufnuf, foobar, "nufnuf"),
     List2 = chat_client:list_names(nifnif),
     chat_client:sign_out(nufnuf),
     timer:sleep(50),
@@ -105,33 +107,33 @@ mult_user(_) ->
 
 sign_in_twice(_) ->
     chat_client:start(newton),
-    chat_client:sign_in(foobar, newton, "Isaac"),
-    chat_client:sign_in(foobar, newton, "Hotpants"),
+    chat_client:sign_in(newton, foobar, "Isaac"),
+    chat_client:sign_in(newton, foobar, "Hotpants"),
     List = chat_server:list_names(foobar),
     [?_assertEqual([["Isaac"]], List)].
 
 send_msg(_) ->
     chat_client:start(r2d2),
     chat_client:start(c3po),
-    chat_client:sign_in(foobar, r2d2, "R2D2"),
-    chat_client:sign_in(foobar, c3po, "C3PO"),
+    chat_client:sign_in(r2d2, foobar, "R2D2"),
+    chat_client:sign_in(c3po, foobar, "C3PO"),
     [?_assertEqual(ok,
                    chat_client:send(c3po, "R2D2", "Robotas - irgi zmogus."))].
 
 non_existant_nick(_) ->
     chat_client:start(airhead),
-    chat_client:sign_in(foobar, airhead, "name"),
+    chat_client:sign_in(airhead, foobar, "name"),
     [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
      
 client_crash(_) ->
     chat_client:start(phantom),
-    chat_client:sign_in(foobar, phantom, "Phantom"),
+    chat_client:sign_in(phantom, foobar, "Phantom"),
     chat_client:shutdown(phantom),
     [?_assertEqual([], chat_server:list_names(foobar))].
 
 create_channel(_) ->
     chat_client:start(gytis),
-    chat_client:sign_in(foobar, gytis, "Gytis"),
+    chat_client:sign_in(gytis, foobar, "Gytis"),
     chat_client:create(gytis, erlang),
     Channels = chat_server:list_channels(foobar),
     chat_client:shutdown(gytis),
@@ -139,7 +141,7 @@ create_channel(_) ->
 
 list_channels(_) ->
     chat_client:start(foo),
-    chat_client:sign_in(foobar, foo, "Bar"),
+    chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:create(foo, haskell),
     Channels = chat_client:list_channels(foo),
@@ -148,7 +150,7 @@ list_channels(_) ->
 
 join_channel(_) ->
     chat_client:start(foo),
-    chat_client:sign_in(foobar, foo, "Bar"),
+    chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:join(foo, erlang),
     Users = chat_client:list_ch_users(foo, erlang),
@@ -157,7 +159,7 @@ join_channel(_) ->
 
 send_channel(_) ->
     chat_client:start(foo),
-    chat_client:sign_in(foobar, foo, "Bar"),
+    chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, kanalas),
     chat_client:join(foo, kanalas),
     chat_client:send_channel(foo, kanalas, "Hello world"),

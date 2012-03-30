@@ -2,9 +2,11 @@
 -behaviour(gen_server).
 
 %% API
--export([start/1, sign_in/3, send/3, list_names/1, create/2, list_channels/1,
-         sign_out/1, shutdown/1, join/2, list_ch_users/2, leave/2,
-         send_channel/3]).
+-export([start/0, start/1, sign_in/2, sign_in/3, send/2, send/3, list_names/0,
+         list_names/1, create/1, create/2, list_channels/0, list_channels/1,
+         sign_out/0, sign_out/1, shutdown/0, shutdown/1, join/1, join/2, 
+         list_ch_users/1, list_ch_users/2, leave/1, leave/2, 
+         send_channel/2, send_channel/3]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -23,9 +25,11 @@
 %% as a local name.
 %% @end
 %% ---------------------------------------------------------------------  
+start() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 start(RefName) ->
-    {ok, Pid} = gen_server:start({local, RefName}, ?MODULE, [], []),
-    set_pid(RefName, Pid).
+    gen_server:start_link({local, RefName}, ?MODULE, [], []).
 
 %% ---------------------------------------------------------------------     
 %% @doc
@@ -33,7 +37,9 @@ start(RefName) ->
 %% @end
 %% TODO: change the name into something more appropriate
 %% --------------------------------------------------------------------- 
-sign_in(ServerName, RefName, Nick) ->
+sign_in(ServerName, Nick) ->
+    gen_server:call(?MODULE, {sign_in, ServerName, Nick}).
+sign_in(RefName, ServerName, Nick) ->
     gen_server:call(RefName, {sign_in, ServerName, Nick}).
 
 %% --------------------------------------------------------------------- 
@@ -41,9 +47,13 @@ sign_in(ServerName, RefName, Nick) ->
 %% Send a message to another user.
 %% @end
 %% --------------------------------------------------------------------- 
+send(To, Message) ->
+    gen_server:call(?MODULE, {sendmsg, To, Message}).
 send(RefName, To, Message) ->
     gen_server:call(RefName, {sendmsg, To, Message}).
 
+list_names() ->
+    gen_server:call(?MODULE, list_names).
 list_names(RefName) ->
     gen_server:call(RefName, list_names).
 
@@ -52,6 +62,8 @@ list_names(RefName) ->
 %% List the available channels
 %% @end
 %% --------------------------------------------------------------------- 
+list_channels() ->
+    gen_server:call(?MODULE, list_channels).
 list_channels(RefName) ->
     gen_server:call(RefName, list_channels).
 
@@ -60,6 +72,8 @@ list_channels(RefName) ->
 %% Create a new channel
 %% @end
 %% --------------------------------------------------------------------- 
+create(Channel) ->
+    gen_server:call(?MODULE, {create, Channel}).
 create(RefName, Channel) ->
     gen_server:call(RefName, {create, Channel}).
 
@@ -68,6 +82,8 @@ create(RefName, Channel) ->
 %% Join a channel
 %% @end
 %% --------------------------------------------------------------------- 
+join(Channel) ->
+    gen_server:call(?MODULE, {join, Channel}).
 join(RefName, Channel) ->
     gen_server:call(RefName, {join, Channel}).
 
@@ -76,6 +92,8 @@ join(RefName, Channel) ->
 %% List users on a particular channel
 %% @end
 %% --------------------------------------------------------------------- 
+list_ch_users(Channel) ->
+    gen_server:call(?MODULE, {list_ch_users, Channel}).
 list_ch_users(RefName, Channel) ->
     gen_server:call(RefName, {list_ch_users, Channel}).
 
@@ -84,6 +102,8 @@ list_ch_users(RefName, Channel) ->
 %% Leave a channel
 %% @end
 %% --------------------------------------------------------------------- 
+leave(Channel) ->
+    gen_server:call(?MODULE, {leave, Channel}).
 leave(RefName, Channel) ->
     gen_server:call(RefName, {leave, Channel}).
 
@@ -92,12 +112,18 @@ leave(RefName, Channel) ->
 %% Send a message to the channel
 %% @end
 %% --------------------------------------------------------------------- 
+send_channel(Channel, Message) ->
+    gen_server:call(?MODULE, {send_ch, Channel, Message}).
 send_channel(RefName, Channel, Message) ->
     gen_server:call(RefName, {send_ch, Channel, Message}).
 
+sign_out() ->
+    gen_server:cast(?MODULE, sign_out).
 sign_out(RefName) ->
     gen_server:cast(RefName, sign_out).
 
+shutdown() ->
+    gen_server:call(?MODULE, shutdown).
 shutdown(RefName) ->
     gen_server:call(RefName, stop).
 
@@ -106,16 +132,26 @@ shutdown(RefName) ->
 %% ===================================================================== 
 
 init([]) ->
-    {ok, #state{}}.
+    {ok, #state{pid=self()}}.
 
 
-handle_call({sign_in, Server, Name}, _From, S=#state{pid=Pid}) ->
-    gen_server:cast({global, Server}, {nickserv, Name, Pid}),
-    erlang:monitor(process, Server),
-    {reply, ok, S#state{server=Server, name=Name}};
+handle_call({sign_in, ConnectServer, Name}, _From, S=#state{pid=Pid}) ->
+    case gen_server:call({global, ConnectServer}, {nickserv, Name, Pid}) of
+        {server, Server} ->
+            io:format("You've been assigned to server ~p.~n", [Server]),
+            erlang:monitor(process, global:whereis_name(Server)),
+            {reply, ok, S#state{server=Server, name=Name}};
+        already_signed_in ->
+            io:format("You are already signed in.~n", []),
+            {reply, ok, S};
+        name_taken ->
+            io:format("~p is taken. Select a different nick.~n", [Name]),
+            {reply, name_taken, S}
+    end;
 
 handle_call({sendmsg, To, Msg}, _From, S=#state{server=Server,
                                                 pid=Pid}) ->
+    io:format("~p >>> ~p~n", [To, Msg]),
     gen_server:call({global, Server}, {sendmsg, Pid, To, Msg}),
     {reply, ok, S};
 
@@ -156,9 +192,6 @@ handle_cast(sign_out, S=#state{server=Server, name=Nick}) ->
     gen_server:cast({global, Server}, {sign_out, Nick}),
     {noreply, S};
 
-handle_cast({set_pid, Pid}, S=#state{}) ->
-    {noreply, S#state{pid=Pid}};
-
 handle_cast({not_found, To}, S) ->
     io:format("~p - no such user.", [To]),
     {noreply, S};
@@ -166,25 +199,12 @@ handle_cast({not_found, To}, S) ->
 handle_cast(_Message, S) ->
     {noreply, S}.
 
-handle_info({msg, {name_taken, Name}}, S) ->
-     io:format("~p is taken. Select a different nick.~n", [Name]),
-     {noreply, S};
-
-handle_info({msg, already_signed_in}, S) ->
-     io:format("You are already signed in.~n", []),
-     {noreply, S};
-
 handle_info({msg, {priv, From, Message}}, S) ->
     io:format("~p >>> ~p~n", [From, Message]),
     {noreply, S};
 
 handle_info({msg, {ch, Name, Ch, Message}}, S) ->
     io:format("#~p[~p]: ~p~n", [Ch, Name, Message]),
-    {noreply, S};
-
-handle_info({msg, {server_full, Suggestion}}, S) ->
-    io:format("The server that you've tried to connect to was full.~n"),
-    io:format("We suggest trying | ~p | instead.~n", [Suggestion]),
     {noreply, S};
 
 handle_info({'DOWN', _, process, {Server, _}, _}, S=#state{server=Server}) ->
@@ -204,6 +224,3 @@ code_change(_OldVsn, S, _Extra) ->
 %% ===================================================================== 
 %% Internal functions
 %% ===================================================================== 
-
-set_pid(RefName, Pid) ->
-    gen_server:cast(RefName, {set_pid, Pid}).

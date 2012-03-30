@@ -1,9 +1,0 @@
-1. users can delete channels
-2. server name clashes
-3. add clean shutdowns to tests
-4. all list_users etc. functions should be uniform
-5. implement channel not found
-6. stop sending printmsg through handle_info
-7. implement load balancing
-8. remove macros
-9. use nick/name consistently throughout the project
