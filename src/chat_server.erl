@@ -329,10 +329,26 @@ handle_cast({server, {New, Pid}}, S=#state{map=STbl}) ->
     erlang:monitor(process, global:whereis_name(New)),
     {noreply, S};
 
+
+
+%% ---------------------------------------------------------------------
+%% @private
+%% @doc
+%% Forward the request to create a Channel to the leader
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({chanserv, Channel}, S=#state{leader=Leader}) ->
     gen_server:cast({global, Leader}, {create, Channel}),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Insert a new channel into the leader's channel table and forward
+%% the request to do the same to other servers.
+%% Do nothing if the channel already exists.
+%% @end
+%% ---------------------------------------------------------------------  
 handle_cast({create, Channel}, S=#state{name=Server,
                                         map=STbl,
                                         channels=ChTbl}) ->
@@ -348,49 +364,96 @@ handle_cast({create, Channel}, S=#state{name=Server,
             {noreply, S}
     end;
 
+%% ---------------------------------------------------------------------  
+%% @private
+%% @doc
+%% Receives the forwarded request to add a new channel to the list.
+%% Does that.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({channel, Channel}, S=#state{channels=ChTbl}) ->
     ets:insert(ChTbl, {Channel, []}),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Update channel's userlist and tell other servers to do the same
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({join, Name, Channel}, S=#state{name=Server, 
                                             map=STbl,
                                             channels=ChTbl}) ->
-    Map = create_map(STbl),
+    %% create a list of server to forward the info about join to
+    ServerList = create_map(STbl),
+    Forward = lists:delete([Server], ServerList),
+
+    %% update a channel's user list
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:append(CurrentUsers, [Name]),
-    Forward = lists:delete([Server], Map),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+
+    %% tell other servers to do the same
     lists:map(fun([Serv]) ->
                 new(new_join, {Name, Channel}, Serv) end, Forward),
-    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+    
+    %% send a message to the channel so that other users see a
+    %% message about the new user.
     gen_server:cast({global, Server},
                     {send_ch, Name, Channel, " *** joined the channel ***"}),
     {noreply, S};
 
+%% ---------------------------------------------------------------------  
+%% @private
+%% @doc
+%% Handles forwarded request to add a new user to an existing channel.
+%% @end
+%% ---------------------------------------------------------------------   
 handle_cast({new_join, {Name, Channel}}, S=#state{channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:append(CurrentUsers, [Name]),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Print the message about user leaving to the channel, delete the user
+%% from the channel and tell other servers to do the same.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({leave, Name, Channel}, S=#state{name=Server,
                                              map=STbl,
                                              channels=ChTbl}) ->
+    %% print a message to the channel about user leaving
     gen_server:cast({global, Server},
                     {send_ch, Name, Channel, "*** has left the channel ***"}),
-    Map = create_map(STbl),
+
+    %% update the channel userlist
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:delete(Name, CurrentUsers),
-    Forward = lists:delete([Server], Map),
+    ets:update_element(ChTbl, Channel, {2, NewUsers}),
+
+    %% forward the message about user leaving to other servers
+    ServerList = create_map(STbl),
+    Forward = lists:delete([Server], ServerList),
     lists:map(fun([Serv]) ->
                 new(new_leave, {Name, Channel}, Serv) end, Forward),
-    ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% handle the forwarded message about user leaving
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({new_leave, {Name, Channel}}, S=#state{channels=ChTbl}) ->
     CurrentUsers = ets:lookup_element(ChTbl, Channel, 2),
     NewUsers = lists:delete(Name, CurrentUsers),
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
+
+
 
 %% ---------------------------------------------------------------------  
 %% @private
