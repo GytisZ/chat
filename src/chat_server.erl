@@ -125,11 +125,23 @@ handle_call({nickserv, Nick, Pid}, From, S=#state{leader=Leader}) ->
     gen_server:cast({global, Leader}, {sign_in, NewUser, From}),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for chat_client:send/2,3. Matches the addresssee's name to
+%% the corresponding user's entry, looks up his host and forwards the
+%% message to the corresponding server. 
+%% Adds the authors name instead of pid to the message.
+%%
+%% Notifies the chat_client that addressee was not_found if there is
+%% no matching entry.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call({sendmsg, From, To, Msg}, _From, S=#state{name=Server}) ->
     [[Author]] = ets:match(Server, {'$1', From, '_'}),
     case ets:match(Server, {To, '_', '$2'})  of
         [[Host]]->
-            gen_server:cast({global, Host}, {msg, To, {priv, Author, Msg}});
+            send_msg(Host, To, {priv, Author, Msg});
         [] -> gen_server:cast(From, {not_found, To})
     end,
     {reply, ok, S};
@@ -137,11 +149,20 @@ handle_call({sendmsg, From, To, Msg}, _From, S=#state{name=Server}) ->
 handle_call(stop, _From, S) ->
     {stop, normal, ok, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for network/1, Builds a tuple {current_server_name,
+%% cluster_leader_name, [list_of_all_servers_in_the_cluser}.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call(network, _From, S=#state{name=Server, map=STbl, leader=Leader}) ->
     {reply, {Server, Leader, create_map(STbl)}, S};
 
 handle_call(_Request, _From, S) ->
-    {reply, ok, S}.
+    {noreply, S}.
+
+
 
 %% --------------------------------------------------------------------- 
 %% @private
@@ -196,41 +217,90 @@ handle_cast({user, NewUser}, S=#state{name=Server}) ->
     ets:insert(Server, NewUser),
     {noreply, S};
 
-
-%% ---------------------------------------------------------------------  
+%% --------------------------------------------------------------------- 
 %% @private
 %% @doc
-%% Create a new map with the connecting server appended and send it to
-%% every other server on the network. Forward the request to the leader
-%% if the server contacted wasn't the leader.
+%% Forwards all servers info about a user leaving
+%% @end
+%% --------------------------------------------------------------------- 
+handle_cast({sign_out, Nick}, S=#state{map=STbl}) ->
+    ServerList = create_map(STbl), 
+    lists:map(fun([T]) ->
+                gen_server:cast({global, T}, {user_left, Nick}) end, 
+              ServerList),
+    {noreply, S};
+
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Deletes user's who has left entry from the user table
+%% --------------------------------------------------------------------- 
+handle_cast({user_left, Nick}, S=#state{name=Server}) ->
+    ets:delete(Server, Nick),
+    {noreply, S};
+
+
+
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Adds info about itself and finally sends it to the target sever
 %% @end
 %% --------------------------------------------------------------------- 
 handle_cast({connect, Target}, S=#state{name=Server, pid=Pid}) ->
     gen_server:cast({global, Target}, {connect, Server, Pid}),
     {noreply, S};
 
+%% ---------------------------------------------------------------------  
+%% @private
+%% @doc
+%% The callback activated in the server that another server tries to 
+%% conenct to. It forwards the request to the leader if this server
+%% is not. 
+%%
+%% Coordinates the insertion of the new server into the tables
+%% across the cluster and passes the current state of the cluster 
+%% to the new server.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({connect, New, Pid}, S=#state{name=Server, 
                                                     leader=Leader, 
                                                     map=STbl,
                                                     channels=ChTbl}) ->
-    Map = create_map(STbl),
-    ets:insert(STbl, {New, Pid}),
-    Recipients = lists:delete([Server], Map),
     case Leader == Server  of
         true -> 
+            %% Tell other servers to insert new server into their tables
+            %% and do it here
+            CurrentServers = create_map(STbl),
+            Recipients = lists:delete([Server], CurrentServers),
             lists:map(fun([T]) -> 
                        new(server, {New, Pid}, T) end, Recipients), 
+            ets:insert(STbl, {New, Pid}),
+            
+            %% Take the tables representing the state of the whole
+            %% cluster and pass them to the new server 
             PassMap = ets:tab2list(STbl),
             PassChannels = ets:tab2list(ChTbl),
             PassUsers = ets:tab2list(Server),
             Pass = {PassUsers, PassMap, PassChannels},
             gen_server:cast({global, New}, {init, Pass, Leader}),
+
+            %% set up a monitor
             erlang:monitor(process, global:whereis_name(New)),
             {noreply, S};
-        false -> gen_server:cast({global, New}, {leader, Leader}),
+        false -> gen_server:cast({global, Leader}, {connect, New, Pid}),
             {noreply, S}
     end;
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% After the cluster tells other servers about the new one it contacts
+%% the new one through here and passes on the info about the whole
+%% cluster in the New tuple. This function saves the info on the current
+%% server. And sets up monitors of other servers.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({init, New, Leader}, S=#state{name=Server,
                                          map=STbl,
                                          channels=ChTbl}) ->
@@ -241,31 +311,22 @@ handle_cast({init, New, Leader}, S=#state{name=Server,
     ets:insert(Server, NewUsers),
     ets:delete_all_objects(ChTbl),
     ets:insert(ChTbl, NewChannels),
-    Map = ets:match(STbl, {'$1', '_'}),
+    ServerList = create_map(STbl),
     lists:map(fun([Serv]) -> 
-                erlang:monitor(process, global:whereis_name(Serv)) end, Map),
+                erlang:monitor(process, global:whereis_name(Serv)) end,
+              ServerList),
     {noreply, S#state{leader=Leader}};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Informs a non-leader server about a new server in the cluster, 
+%% inserts the new server into the table and sets up a monitor of it.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({server, {New, Pid}}, S=#state{map=STbl}) ->
     ets:insert(STbl, {New, Pid}),
     erlang:monitor(process, global:whereis_name(New)),
-    {noreply, S};
-
-handle_cast(stop, S) ->
-    {stop, normal, S};
-
-handle_cast({sign_out, Nick}, S=#state{map=STbl}) ->
-    Map = create_map(STbl), 
-    lists:map(fun([T]) ->
-                gen_server:cast({global, T}, {user_left, Nick}) end, Map),
-    {noreply, S};
-
-handle_cast({user_left, Nick}, S=#state{name=Server}) ->
-    ets:delete(Server, Nick),
-    {noreply, S};
-
-handle_cast({leader, Leader}, S=#state{name=Server}) ->
-    connect(Server, Leader),
     {noreply, S};
 
 handle_cast({chanserv, Channel}, S=#state{leader=Leader}) ->
@@ -331,6 +392,14 @@ handle_cast({new_leave, {Name, Channel}}, S=#state{channels=ChTbl}) ->
     ets:update_element(ChTbl, Channel, {2, NewUsers}),
     {noreply, S};
 
+%% ---------------------------------------------------------------------  
+%% @private
+%% @doc
+%% Callback for chat_client:send_channel/1,2 gets the list of users 
+%% in the channel and sends them all messages thourgh the current
+%% server. (Leaves finding out the host to send_msg).
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({send_ch, From, Ch, Msg}, S=#state{name=Server, 
                                                channels=ChTbl}) ->
     ChannelUsers = ets:lookup_element(ChTbl, Ch, 2),
@@ -338,6 +407,13 @@ handle_cast({send_ch, From, Ch, Msg}, S=#state{name=Server,
                 send_msg(Server, U, {ch, From, Ch, Msg}) end, ChannelUsers),
     {noreply, S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Receives a message about the user who has gone down, finds the entry
+%% in the table and removes him.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({quit, Pid}, S=#state{name=Server}) ->
     case ets:match(Server, {'$1', Pid, '_'}) of
         [[Nick]] -> 
@@ -347,6 +423,14 @@ handle_cast({quit, Pid}, S=#state{name=Server}) ->
     {noreply, S};
 
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Looks up the host of the addressee and forwards the message to it
+%% if the Server is not host itself. (This ir redundant in case of
+%% private messages because, they are already sent to host).
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({msg, To, Message}, S=#state{name=Server}) ->
     [[Pid, Host]] = ets:match(Server, {To, '$1', '$2'}),
     case Host of 
@@ -355,6 +439,12 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
         Other ->
             send_msg(Other, To, Message)
     end,
+    {noreply, S};
+
+handle_cast(stop, S) ->
+    {stop, normal, S};
+
+handle_cast(_Msg, S) ->
     {noreply, S}.
 
 %% --------------------------------------------------------------------- 
@@ -365,14 +455,15 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
 %% @end
 %% --------------------------------------------------------------------- 
 handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{map=STbl}) ->
-    Keys = ets:match(STbl, {'_', '$1'}),
-    Map = create_map(STbl),
-    case lists:member([Pid], Keys) of
-        true ->
+    ServerPids = ets:match(STbl, {'_', '$1'}),
+    case lists:member([Pid], ServerPids) of
+        true ->   %% it's a server
             NewState = handledown_server(Pid, S);
-        false ->
+        false ->  %% it's a user
+            %% create a list of servers and forward them the info
+            ServerList = create_map(STbl),
             lists:map(fun([Serv]) -> 
-                gen_server:cast({global, Serv}, {quit, Pid}) end, Map),
+                gen_server:cast({global, Serv}, {quit, Pid}) end, ServerList),
             NewState = S
     end,
     {noreply, NewState};
@@ -400,6 +491,13 @@ code_change(_OldVsn, S, _Extra) ->
 new(Tag, Message, Target) ->
     gen_server:cast({global, Target}, {Tag, Message}).
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Unifies sending messages to users/channels. User handles the message
+%% based on the tag of the Message tuple.
+%% @end
+%% --------------------------------------------------------------------- 
 send_msg(Server, User, Message) ->
     gen_server:cast({global, Server}, {msg, User, Message}).
 
