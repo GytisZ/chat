@@ -53,6 +53,11 @@ send(To, Message) ->
 send(RefName, To, Message) ->
     gen_server:call(RefName, {sendmsg, To, Message}).
 
+%% --------------------------------------------------------------------- 
+%% @doc
+%% List the names of all the users currently connected to the cluster.
+%% @end
+%% --------------------------------------------------------------------- 
 list_names() ->
     gen_server:call(?MODULE, list_names).
 list_names(RefName) ->
@@ -136,6 +141,14 @@ init([]) ->
     {ok, #state{pid=self()}}.
 
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Send the request to connect to a server. The server will reply with
+%% a name of the server the client was assigned to, or a reason why the
+%% client could not be connected.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call({sign_in, ConnectServer, Name}, _From, S=#state{pid=Pid}) ->
     case gen_server:call({global, ConnectServer}, {nickserv, Name, Pid}) of
         {server, Server} ->
@@ -186,7 +199,7 @@ handle_call(stop, _From, S) ->
     {stop, normal, ok, S};
 
 handle_call(_Request, _From, S) ->
-    {reply, ok, S}.
+    {noreply, S}.
 
 
 handle_cast(sign_out, S=#state{server=Server, name=Nick}) ->
@@ -221,7 +234,3 @@ terminate(_Reason, _S) ->
 
 code_change(_OldVsn, S, _Extra) ->
     {ok, S}.
-
-%% ===================================================================== 
-%% Internal functions
-%% ===================================================================== 
