@@ -48,6 +48,15 @@ send_channel_test_() ->
     {"client can send messages to a channel.",
      ?setup(fun send_channel/1)}.
 
+use_client_without_ref_test_() ->
+    {"chat client should be fully functional without passing the RefName to the
+      API functions",
+     ?setup(fun mini_api/1)}.
+
+wrong_messages_test_() ->
+    {"chat client shouldn't crash because it received a wrong message.",
+     ?setup(fun wrong_messages/1)}.
+
 %% ===================================================================== 
 %% Setup functions
 %% =====================================================================  
@@ -55,33 +64,39 @@ send_channel_test_() ->
 start() ->
     {ok, Pid} = chat_server_sup:start_link(),
     chat_server_sup:start(foobar),
-    Pid.
+    {ok, Pid2} = chat_client_sup:start_link(),
+    {Pid, Pid2}.
 
-stop(Pid) ->
+stop({Pid, Pid2}) ->
     MRef = erlang:monitor(process, Pid),
+    MRef2 = erlang:monitor(process, Pid2),
     erlang:exit(Pid, normal),
-    receive {'DOWN', MRef, _, _, _} -> ok end.
+    receive {'DOWN', MRef, _, _, _} -> ok end,
+    erlang:exit(Pid2, normal),
+    receive {'DOWN', MRef2, _, _, _} -> ok end.
 
 %%% ACTUAL TESTS
 
 sign_in_and_out(_) ->
-    chat_client:start(baliulia),
+    chat_client_sup:start(baliulia),
     chat_client:sign_in(baliulia, foobar, "baliulia"),
     List1 = chat_client:list_names(baliulia),
     chat_client:sign_out(baliulia),
     timer:sleep(50),
     List2 = chat_client:list_names(baliulia),
+    chat_server:shutdown(foobar),
+    timer:sleep(50),
     [?_assertEqual([["baliulia"]], List1),
      ?_assertEqual([], List2)]. 
 
 name_taken(_) ->
-    chat_client:start(gytis),
+    chat_client_sup:start(gytis),
     chat_client:sign_in(gytis, foobar, "Gytis"),
-    chat_client:start(imposter),
+    chat_client_sup:start(imposter),
     chat_client:sign_in(imposter, foobar, "Gytis"),
     List = chat_server:list_names(foobar),
-    chat_client:shutdown(gytis),
-    chat_client:shutdown(imposter),
+    chat_client_sup:stop(gytis),
+    chat_client_sup:stop(imposter),
     [?_assertEqual([["Gytis"]], List)].
 
 mult_user(_) ->
@@ -126,46 +141,71 @@ non_existant_nick(_) ->
     [?_assertEqual(ok, chat_client:send(airhead, "friend", "message"))].
      
 client_crash(_) ->
-    chat_client:start(phantom),
+    chat_client_sup:start(phantom),
     chat_client:sign_in(phantom, foobar, "Phantom"),
-    chat_client:shutdown(phantom),
+    chat_client_sup:stop(phantom),
     [?_assertEqual([], chat_server:list_names(foobar))].
 
 create_channel(_) ->
-    chat_client:start(gytis),
+    chat_client_sup:start(gytis),
     chat_client:sign_in(gytis, foobar, "Gytis"),
     chat_client:create(gytis, erlang),
     Channels = chat_server:list_channels(foobar),
-    chat_client:shutdown(gytis),
+    chat_client_sup:stop(gytis),
     [?_assertEqual([[erlang]], Channels)].
 
 list_channels(_) ->
-    chat_client:start(foo),
+    chat_client_sup:start(foo),
     chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:create(foo, haskell),
     Channels = chat_client:list_channels(foo),
-    chat_client:shutdown(foo),
+    chat_client_sup:stop(foo),
     [?_assertEqual([[haskell], [erlang]], Channels)].
 
 join_channel(_) ->
-    chat_client:start(foo),
+    chat_client_sup:start(foo),
     chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, erlang),
     chat_client:join(foo, erlang),
     Users = chat_client:list_ch_users(foo, erlang),
-    chat_client:shutdown(foo),
-    [?_assertEqual([[["Bar"]]], Users)].
+    chat_client:leave(foo, erlang),
+    Users2 = chat_client:list_ch_users(foo, erlang),
+    chat_client_sup:stop(foo),
+    [?_assertEqual([[["Bar"]]], Users),
+     ?_assertEqual([[[]]], Users2)].
 
 send_channel(_) ->
-    chat_client:start(foo),
+    chat_client_sup:start(foo),
     chat_client:sign_in(foo, foobar, "Bar"),
     chat_client:create(foo, kanalas),
     chat_client:join(foo, kanalas),
     chat_client:send_channel(foo, kanalas, "Hello world"),
-    chat_client:shutdown(foo),
+    chat_client_sup:stop(foo),
     [?_assertEqual(1, 1)].
     
-%%%%%%%%%%%%%%%%%%%%%%%%
-%%% HELPER FUNCTIONS %%%
-%%%%%%%%%%%%%%%%%%%%%%%%
+mini_api(_) ->
+    chat_client_sup:start(),
+    chat_client:sign_in(foobar, "Baz"),
+    chat_client:send("Baz", "Hey me"),
+    List1 = chat_client:list_names(),
+    chat_client:create(erlang),
+    List2 = chat_client:list_channels(),
+    chat_client:join(erlang),
+    List3 = chat_client:list_ch_users(erlang),
+    chat_client:send_channel(erlang, "Hey me again"),
+    chat_client:leave(erlang),
+    List4 = chat_client:list_ch_users(erlang),
+    chat_client:sign_out(),
+    chat_client:shutdown(),
+    [?_assertEqual([["Baz"]], List1),
+     ?_assertEqual([[erlang]], List2),
+     ?_assertEqual([[["Baz"]]], List3),
+     ?_assertEqual([[[]]], List4)].
+
+wrong_messages(_) ->
+    {ok, Pid} = chat_client_sup:start(foo),
+    gen_server:cast(Pid, somerandomstuff),
+    Pid ! {morerandomstuff},
+    [?_assertEqual(ok, ok)].
+

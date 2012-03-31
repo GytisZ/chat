@@ -129,7 +129,7 @@ sign_out(RefName) ->
     gen_server:cast(RefName, sign_out).
 
 shutdown() ->
-    gen_server:call(?MODULE, shutdown).
+    gen_server:call(?MODULE, stop).
 shutdown(RefName) ->
     gen_server:call(RefName, stop).
 
@@ -221,7 +221,7 @@ handle_info({msg, {ch, Name, Ch, Message}}, S) ->
     io:format("#~p[~p]: ~p~n", [Ch, Name, Message]),
     {noreply, S};
 
-handle_info({'DOWN', _, process, {Server, _}, _}, S=#state{server=Server}) ->
+handle_info({'DOWN', _, process, _, _}, S=#state{server=Server}) ->
     io:format("The server ~p has gone offline.~n", [Server]),
     io:format("Please connect to a server to continue chatting.~n"),
     {noreply, S#state{server=null, name=null}};
