@@ -57,6 +57,10 @@ wrong_messages_test_() ->
     {"chat client shouldn't crash because it received a wrong message.",
      ?setup(fun wrong_messages/1)}.
 
+client_sup_test_() ->
+    {"testing untested chat_client_sup functions.",
+     ?setup(fun client_sup/1)}.
+
 %% ===================================================================== 
 %% Setup functions
 %% =====================================================================  
@@ -177,11 +181,21 @@ join_channel(_) ->
 
 send_channel(_) ->
     chat_client_sup:start(foo),
+    chat_server_sup:start(barfoo),
+    chat_server:connect(barfoo, foobar),
+    timer:sleep(50),
+    chat_client_sup:start(bar),
     chat_client:sign_in(foo, foobar, "Bar"),
+    chat_client:sign_in(bar, barfoo, "Foo"),
     chat_client:create(foo, kanalas),
     chat_client:join(foo, kanalas),
+    chat_client:join(bar, kanalas),
+    timer:sleep(50),
     chat_client:send_channel(foo, kanalas, "Hello world"),
+    timer:sleep(50),
     chat_client_sup:stop(foo),
+    chat_client_sup:stop(bar),
+    chat_server:shutdown(barfoo),
     [?_assertEqual(1, 1)].
     
 mini_api(_) ->
@@ -209,3 +223,6 @@ wrong_messages(_) ->
     Pid ! {morerandomstuff},
     [?_assertEqual(ok, ok)].
 
+client_sup(_) ->
+    chat_client_sup:start(),
+    [?_assertEqual(chat_client_sup:stop(), ok)].

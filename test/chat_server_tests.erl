@@ -31,16 +31,20 @@ network_channel_test_() ->
     {"channels are global.",
      ?setup(fun network_channel/1)}.
 
+wrong_messages_test_() ->
+    {"server controls unplanned messages correctly",
+     ?setup(fun wrong_messages/1)}.
+
 %%%%%%%%%%%%%%%%%%%%%%%
 %%% SETUP FUNCTIONS %%%
 %%%%%%%%%%%%%%%%%%%%%%%
 
 start() ->
     {ok, Pid} = chat_server_sup:start_link(),
-    chat_server_sup:start(foo),
-    Pid.
+    {ok, Pid2} = chat_server_sup:start(foo),
+    {Pid, Pid2}.
 
-stop(Pid) ->
+stop({Pid, _}) ->
     MRef = erlang:monitor(process, Pid),
     chat_server_sup:stop(foo),
     erlang:exit(Pid, normal),
@@ -51,7 +55,7 @@ stop(Pid) ->
 %%% ACTUAL TESTS %%%
 %%%%%%%%%%%%%%%%%%%%
 
-is_registered(Pid) ->
+is_registered({_, Pid}) ->
     [?_assert(erlang:is_process_alive(Pid))].
 
 server_connect(_) ->
@@ -109,13 +113,17 @@ channels_propagate(_) ->
     chat_client:sign_in(qux, foo, "Quux"),
     chat_client:create(qux, erlang),
     chat_client:create(qux, irssi),
+    chat_client:join(qux, erlang),
     timer:sleep(50),
     chat_client:start(kinzaza),
     chat_client:sign_in(kinzaza, baz, "kinzaza"),
+    chat_client:join(kinzaza, erlang),
+    chat_client:send_channel(kinzaza, erlang, "yo"),
+    chat_client:leave(kinzaza, erlang),
     Channels = chat_client:list_channels(kinzaza),
     chat_client:shutdown(kinzaza),
     chat_client:shutdown(qux),
-    chat_server:shutdown(bar),
+    gen_server:cast({global, bar}, stop),
     chat_server:shutdown(baz),
     [?_assertEqual([[irssi], [erlang]], Channels)].
 
@@ -142,3 +150,7 @@ network_channel(_) ->
     chat_server:shutdown(bar),
     [?_assertEqual([[["baz", "qux"]]], List1),
      ?_assertEqual([[["baz"]]], List2)].
+
+wrong_messages({_, Pid}) ->
+    Pid ! helloworld,
+    [?_assertEqual(gen_server:cast(Pid, yabadabadoo), ok)].
