@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% public
--export([start/1, start_link/1, connect/2, network/1,
+-export([start_link/1, connect/2, network/1,
          list_names/1, list_channels/1, shutdown/1]).
 
 %% private
@@ -84,15 +84,42 @@ init([{Server}]) ->
                 pid=self(),
                 channels=ChannelsTable}}.
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for list_names/1, gets user names from user table and
+%% returns them
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call(list_names, _From, S=#state{name=Server}) ->
     {reply, ets:match(Server, {'$1', '_', '_'}), S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for list_channels/1, returns a list of all current channels
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call(list_ch, _From, S=#state{channels=Ch}) ->
     {reply, ets:match(Ch, {'$1', '_'}), S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for chat_client:list_ch_users/1,2. Finds the appropriate
+%% table entry and returns it.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call({list_ch_users, Channel}, _From, S=#state{channels=ChTbl}) ->
     {reply, ets:match(ChTbl, {Channel, '$1'}), S};
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Callback for chat_client:sign_in/2,3. Forwards the request to the
+%% cluster leader in order to improve consistency.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_call({nickserv, Nick, Pid}, From, S=#state{leader=Leader}) ->
     NewUser = {Nick, Pid},
     gen_server:cast({global, Leader}, {sign_in, NewUser, From}),
@@ -116,15 +143,35 @@ handle_call(network, _From, S=#state{name=Server, map=STbl, leader=Leader}) ->
 handle_call(_Request, _From, S) ->
     {reply, ok, S}.
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Only the cluster leader uses this one. Other servers forward requests
+%% to here in their handle_call({nickserv, ...}, ...) callback. 
+%%
+%% Checks if the new client is already signed in or the name it chose
+%% is taken. If not - chooses a random server, inserts the new user
+%% there and tells other servers to do the same.
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({sign_in, {Nick, Pid}, From}, S=#state{name=Leader, map=STbl}) ->
+    %% chooses a random server to assign the user to
     Network = ets:tab2list(STbl),
     Rand = random:uniform(length(Network)),
     {Server, _} = lists:nth(Rand, Network),
-    Map = create_map(STbl),
-    Forward = lists:delete([Leader], Map),
+
+    %% creates a list of servers that are gonna get messages about the
+    %% new user
+    ServerList = create_map(STbl),
+    Forward = lists:delete([Leader], ServerList),
+
+    %% tries matching the new client both by nick and by pid to find
+    %% out if the nick is taken or if the client is already signed in
     case {ets:match(Leader, {Nick, '$1', '_'}),
           ets:match(Leader, {'$1', Pid, '_'})} of
-        {[],[]} -> 
+        {[],[]} ->              
+            %%  all good, insert new user into the table and tell
+            %%  others to do the same
             ets:insert(Leader, {Nick, Pid, Server}),
             lists:map(fun([Serv]) ->
                         new(user, {Nick, Pid, Server}, Serv) end, Forward),
@@ -139,10 +186,15 @@ handle_cast({sign_in, {Nick, Pid}, From}, S=#state{name=Leader, map=STbl}) ->
             {noreply, S}
     end;
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Receives the forwarded info about new users on all non-leader servers
+%% @end
+%% --------------------------------------------------------------------- 
 handle_cast({user, NewUser}, S=#state{name=Server}) ->
     ets:insert(Server, NewUser),
     {noreply, S};
-
 
 
 %% ---------------------------------------------------------------------  
@@ -308,7 +360,8 @@ handle_cast({msg, To, Message}, S=#state{name=Server}) ->
 %% --------------------------------------------------------------------- 
 %% @private
 %% @doc
-%% Informs all servers that the user has disconnected.
+%% Checks whether it was a server or client that has gone down. Handles
+%% them down accordingly.
 %% @end
 %% --------------------------------------------------------------------- 
 handle_info({'DOWN', _MRef, process, Pid, _}, S=#state{map=STbl}) ->
@@ -344,8 +397,8 @@ code_change(_OldVsn, S, _Extra) ->
 %% server.
 %% @end
 %% --------------------------------------------------------------------- 
-new(Atom, Message, Target) ->
-    gen_server:cast({global, Target}, {Atom, Message}).
+new(Tag, Message, Target) ->
+    gen_server:cast({global, Target}, {Tag, Message}).
 
 send_msg(Server, User, Message) ->
     gen_server:cast({global, Server}, {msg, User, Message}).
@@ -365,21 +418,24 @@ create_table(Server, Suffix) ->
 create_map(TableName) ->
     ets:match(TableName, {'$1', '_'}).
 
+%% --------------------------------------------------------------------- 
+%% @private
+%% @doc
+%% Deletes server from the server list, sends itself a message about
+%% every user that was affected, sets a new leader if needed.
+%% @end
+%% ---------------------------------------------------------------------  
 handledown_server(DownPid, S=#state{name=Server, leader=Leader, map=STbl}) ->
     Network = ets:tab2list(STbl),
-    {Name, _} = lists:keyfind(DownPid, 2, Network),
-    ets:delete(STbl, Name),
-    AffectedUsers = ets:match(Server, {'_', '$1', Name}),
+    {DownServer, _} = lists:keyfind(DownPid, 2, Network),
+    ets:delete(STbl, DownServer),
+    AffectedUsers = ets:match(Server, {'_', '$1', DownServer}),
     Map = create_map(STbl),
     lists:map(fun([Pid]) -> 
-        lists:map(fun([Serv]) ->
-            gen_server:cast({global, Serv}, {quit, Pid}) end, Map) end, 
-        AffectedUsers),
-    case Name == Leader of
+            gen_server:cast({global, Server}, {quit, Pid}) end, AffectedUsers),
+    case DownServer == Leader of
         true -> SortedMap = lists:sort(Map),
             [[NewLeader] | _ ] = SortedMap;
         false -> NewLeader = Leader
     end,
     S#state{leader=NewLeader}.
-
-

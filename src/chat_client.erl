@@ -152,7 +152,7 @@ handle_call({sign_in, ConnectServer, Name}, _From, S=#state{pid=Pid}) ->
 
 handle_call({sendmsg, To, Msg}, _From, S=#state{server=Server,
                                                 pid=Pid}) ->
-    io:format("~p >>> ~p~n", [To, Msg]),
+    io:format("~p <<< ~p~n", [To, Msg]),
     gen_server:call({global, Server}, {sendmsg, Pid, To, Msg}),
     {reply, ok, S};
 
