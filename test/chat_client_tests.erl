@@ -227,4 +227,4 @@ wrong_messages(_) ->
 
 client_sup(_) ->
     chat_client_sup:start(),
-    [?_assertEqual(chat_client_sup:stop(), ok)].
+    [?_assertEqual(ok, chat_client_sup:stop())].

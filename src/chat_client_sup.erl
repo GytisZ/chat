@@ -36,8 +36,7 @@ stop() ->
     chat_client_sup:stop(client).
 
 stop(Name) ->
-    supervisor:terminate_child(?MODULE, Name),
-    supervisor:delete_child(?MODULE, Name).
+    supervisor:terminate_child(?MODULE, Name).
 
 %% ===================================================================== 
 %% Supervisor callbacks
