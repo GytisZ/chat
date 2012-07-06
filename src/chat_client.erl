@@ -190,8 +190,8 @@ handle_call({leave, Channel}, _From, S=#state{server=Server, name=Name}) ->
 handle_call({list_ch_users, Channel}, _From, S=#state{server=Server}) ->
     {reply, gen_server:call({global, Server}, {list_ch_users, Channel}), S};
 
-handle_call({send_ch, Channel, Message}, _From, S=#state{server=Server,
-                                                         name=Name}) ->
+handle_call({send_ch, Channel, Message}, _From,
+        S=#state{server=Server, name=Name}) ->
     gen_server:cast({global, Server}, {send_ch, Name, Channel, Message}),
     {reply, ok, S};
 
